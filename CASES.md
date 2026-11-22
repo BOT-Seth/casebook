@@ -1,7 +1,7 @@
-# Casebook: The 3 Launch Cases (draft for review)
+# Casebook: The 3 Launch Cases
 
-**Read this before any code is written.** In the app, everything under 🔒 **Hidden** lives in server-only files
-and never reaches the browser. Check that the numbers make sense to you, because you'll be asked about them.
+Everything under 🔒 **Hidden** lives in `src/server/cases/index.ts`, a worker-only module, and never reaches the
+browser (`npm run check:bundle` enforces this). The public half of each case is in `src/cases/catalog.ts`.
 
 Every case has 4 parts, scored out of 100:
 
@@ -72,6 +72,12 @@ deliveries increased spoilage.
 > **Risks:** contract exit penalties; capex if a fresh DC is reopened.
 > **Next steps:** price the contract exit, then pilot daily fresh delivery in 10 stores for 90 days.
 
+🔒 **Grading targets** (in code):
+- Part 1 key facts: the 3PL switch in Jan 2024 · daily → 3×/week fresh deliveries · stores, prices and traffic flat
+- Part 3 "so what": shrink + distribution explain essentially the whole decline, so it's a supply-chain cost problem
+- Part 4 right call: name the 3PL switch (via distribution cost and spoilage) as the root cause; fix the supply chain,
+  not prices
+
 ---
 
 ## Case 2: VoltPath (Market Entry) · Medium
@@ -129,6 +135,11 @@ anchor contracts.
 > **Risks:** ERCOT price spikes squeezing the $0.20 margin; competitors locking up contracts first.
 > **Next steps:** sign the anchor contract, hedge power prices, expand when utilization passes 70%.
 
+🔒 **Grading targets** (in code):
+- Part 1 key facts: $20M budget and 5-year ROI · 40% of fleets self-charge · competitors hold 35% of contracts
+- Part 3 "so what": ~233 vans means ~78% utilization, so anchor contracts are needed before building
+- Part 4 right call: enter in phases, tied to anchor customers (not a 6-hub launch, not a flat no)
+
 ---
 
 ## Case 3: Clarion Analytics Acquisition (Pricing & M&A) · Hard
@@ -181,6 +192,11 @@ anchor contracts.
 >
 > **Risks:** churn stays high; key engineers leave after year 1.
 > **Next steps:** diligence churn by customer segment; pilot a cross-sell offer to 200 Northwind customers.
+
+🔒 **Grading targets** (in code):
+- Part 1 key facts: 30% customer overlap · 5,000 Northwind customers to cross-sell · comps at 4–6× ARR for ~20% churn
+- Part 3 "so what": LTV/CAC of ~2.7× (below 3×) or the price looking expensive
+- Part 4 right call: don't pay $45M upfront; ~$36–40M and/or an earnout tied to churn
 
 ---
 
