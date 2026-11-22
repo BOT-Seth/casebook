@@ -153,3 +153,11 @@ scored 0/4, with feedback saying it answered a different case.
 | `npx deepspace test run all` | ✅ **16/16** (new: parallel-burst spec) |
 | Unit tests | ✅ 16/16 |
 | `tsc`, `eslint`, `npm run check:bundle` | ✅ |
+
+**Found by playing it myself (Nov 22):**
+- **Solved meant finished:** two failed cases showed as "2/3 solved". Solved now means 70+ (decision #29).
+- **0-point finishers were hidden:** the leaderboard filtered out rows with a 0 total, so finishing a case with 0
+  never showed up. Everyone who finishes is now listed.
+- **The owner saw other people's attempts:** the app owner is an admin, and admins can read every attempt, so the
+  owner's Progress page included a test account's run. `useMyAttempts` now filters by user id. Regular members were
+  never affected; the two-user spec proves it.

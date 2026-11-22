@@ -15,12 +15,16 @@ export type AttemptRecord = {
   data: AttemptRow
 }
 
-/** The signed-in user's attempts. The room only sends their own rows (read: 'own'). */
+/**
+ * The signed-in user's attempts. Members only receive their own rows (read:
+ * 'own'), but the app owner is an admin and receives everyone's, so filter by
+ * userId here too.
+ */
 export function useMyAttempts() {
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, userId } = useAuth()
   const { records, status } = useQuery<AttemptRow>('attempts', { orderBy: 'createdAt', orderDir: 'desc' })
   return useMemo(() => {
-    const attempts = (isSignedIn ? records : []) as AttemptRecord[]
+    const attempts = (isSignedIn ? records.filter((r) => r.data.userId === userId) : []) as AttemptRecord[]
     const byCase = new Map<string, { best: number; attempted: boolean; solved: boolean; inProgress: AttemptRecord | null }>()
     for (const a of attempts) {
       const entry = byCase.get(a.data.caseId) ?? { best: 0, attempted: false, solved: false, inProgress: null }
@@ -34,7 +38,7 @@ export function useMyAttempts() {
       byCase.set(a.data.caseId, entry)
     }
     return { attempts, byCase, status }
-  }, [records, status, isSignedIn])
+  }, [records, status, isSignedIn, userId])
 }
 
 interface ActionResponse<T> {
