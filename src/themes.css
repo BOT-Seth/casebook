@@ -16,31 +16,31 @@
  *   4. Switch to it via `data-theme` on <html> in index.html.
  */
 
-/* Paper — Casebook's default: warm notebook paper with an ink-blue accent.
+/* Paper — Casebook's default: off-white with a deep navy accent (consulting-deck look).
  * The dark `slate` theme (styles.css) is the toggle alternative. */
 [data-theme="paper"] {
   color-scheme: light;
-  --color-background: #fbfaf7;
-  --color-foreground: #1c1b18;
+  --color-background: #f7f7f4;
+  --color-foreground: #14181f;
   --color-card: #ffffff;
-  --color-card-foreground: #1c1b18;
+  --color-card-foreground: #14181f;
   --color-popover: #ffffff;
-  --color-popover-foreground: #1c1b18;
-  --color-primary: #1f4fd1;
+  --color-popover-foreground: #14181f;
+  --color-primary: #1b2a4a;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f2f0ea;
-  --color-secondary-foreground: #1c1b18;
-  --color-muted: #f2f0ea;
-  --color-muted-foreground: #6b675e;
-  --color-accent: #ece9e1;
-  --color-accent-foreground: #1c1b18;
+  --color-secondary: #eef0f3;
+  --color-secondary-foreground: #14181f;
+  --color-muted: #eef0f3;
+  --color-muted-foreground: #5b6472;
+  --color-accent: #e7eaef;
+  --color-accent-foreground: #14181f;
   --color-destructive: #c0362c;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e6e2d8;
-  --color-input: #dcd7cb;
-  --color-ring: #1f4fd1;
+  --color-border: #e3e6eb;
+  --color-input: #d5dae2;
+  --color-ring: #1b2a4a;
   --shadow-card: 0 1px 2px 0 rgba(28, 27, 24, 0.04);
   --shadow-card-hover: 0 2px 8px 0 rgba(28, 27, 24, 0.06);
-  --color-shell: #f4f2ec;
-  --color-shell-panel: #fbfaf7;
+  --color-shell: #f0f1f3;
+  --color-shell-panel: #f7f7f4;
 }

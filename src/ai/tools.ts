@@ -11,8 +11,7 @@ import { jsonSchema, tool } from 'ai'
 import type { ToolSet } from 'ai'
 import { z } from 'zod/v4'
 import { BUILT_IN_TOOLS, applyAiToolDefaults } from 'deepspace/worker'
-import type { AgentToolContext, ToolSchema, CollectionSchema } from 'deepspace/worker'
-import { buildCasebookTools } from './casebook-tools'
+import type { ToolSchema, CollectionSchema } from 'deepspace/worker'
 
 type ToolExecutor = (toolName: string, params: Record<string, unknown>) => Promise<unknown>
 
@@ -55,20 +54,7 @@ export function buildSystemPrompt(appName: string, schemas: CollectionSchema[]):
     .join('\n')
 
   return [
-    `You are the interview coach inside "${appName}", a casebook of coding-interview problems`,
-    'that the user writes up in their own words and reviews on a spaced-repetition schedule.',
-    '',
-    'What you are for:',
-    '- Quizzing: call cases_due, pick one, show ONLY its title and prompt, and ask the user to',
-    '  explain their approach. Never reveal the saved approach before they answer.',
-    '- Grading a quiz: compare their answer with the saved approach/complexity/pitfalls, say',
-    '  what they covered and missed, propose a grade (again/hard/good/easy), and after the user',
-    '  agrees call review_case — it computes the next review date on the server.',
-    '- Drafting: when asked to add a problem, create a `cases` record with title, pattern,',
-    '  difficulty, prompt, approach, complexity and pitfalls filled in, visibility "private".',
-    '  Write the approach as a short numbered list, not an essay.',
-    '- Library cases (visibility "public") may belong to other people: read them, never edit them.',
-    '',
+    `You are the assistant for the "${appName}" app on DeepSpace.`,
     "You can read and modify the user's data via the available tools. The",
     "user's own role and permissions still apply at the data layer — your",
     'tool calls run as the calling user, so you can only do what they could.',
@@ -91,9 +77,8 @@ export function buildSystemPrompt(appName: string, schemas: CollectionSchema[]):
 // Tool definitions
 // ============================================================================
 
-export function buildTools(executor: ToolExecutor, context?: AgentToolContext): ToolSet {
+export function buildTools(executor: ToolExecutor): ToolSet {
   const tools: ToolSet = {}
-  if (context) Object.assign(tools, buildCasebookTools(executor, context.userId))
 
   for (const def of BUILT_IN_TOOLS) {
     if (!ALLOWED_TOOL_NAMES.includes(def.name)) continue

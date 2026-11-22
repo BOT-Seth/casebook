@@ -23,9 +23,9 @@
 declare const __DEEPSPACE_SITE_ORIGIN__: string | undefined
 
 export const seo = {
-  title: 'Casebook | Spaced repetition for coding interviews',
+  title: 'Casebook | LeetCode for case interviews',
   description:
-    'Write up interview problems in your own words, explain them from memory, and let an AI coach grade you against your notes on a spaced-repetition schedule.',
+    'Practice consulting, finance and PM case interviews in the real interview format. Submit each part and get graded against hidden checkpoints.',
   /** Public origin for canonical URLs, og:url, and the sitemap — no trailing
    *  slash. Replace with the custom domain once one is attached, e.g.
    *  'https://www.example.com'. */

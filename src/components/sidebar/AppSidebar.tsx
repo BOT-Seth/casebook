@@ -24,10 +24,7 @@ import { AuthOverlay, useAuthProfileReady, signOut } from 'deepspace'
 import {
   BookOpen,
   Box,
-  Brain,
   ChevronDown,
-  Home,
-  Library,
   LogIn,
   LogOut,
   Menu,
@@ -35,7 +32,7 @@ import {
   Settings,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { APP_NAME } from '../../constants'
+import { APP_DISPLAY_NAME as APP_NAME } from '../../constants'
 import type { Role } from '../../constants'
 import { nav } from '../../nav'
 import { cn } from '../../lib/utils'
@@ -57,10 +54,7 @@ import {
 
 /** Icon per nav route; keeps nav.ts as plain data (feature-added entries get the fallback). */
 const NAV_ICONS: Record<string, LucideIcon> = {
-  '/home': Home,
   '/cases': BookOpen,
-  '/drill': Brain,
-  '/library': Library,
   '/settings': Settings,
 }
 

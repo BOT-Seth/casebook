@@ -21,9 +21,8 @@ import { Outlet } from 'react-router-dom'
 import { DeepSpaceAuthProvider, useAuthStatus } from 'deepspace'
 import { RecordProvider, RecordScope, AgentTools } from 'deepspace'
 import { AppSidebar, SidebarMobileHeader } from '../../components/sidebar/AppSidebar'
-import { ChatDock } from '../../components/shell/ChatDock'
 import { useToast } from '@/components/ui'
-import { APP_NAME, SCOPE_ID } from '../../constants'
+import { APP_DISPLAY_NAME, SCOPE_ID } from '../../constants'
 import { schemas } from '../../schemas'
 
 export default function AppLayout() {
@@ -34,7 +33,7 @@ export default function AppLayout() {
     <DeepSpaceAuthProvider>
       {/* The prerendered landing owns the document <title> and React drops it
           when <Seo> unmounts, so every route without <Seo> sets its own. */}
-      <title>{APP_NAME}</title>
+      <title>{APP_DISPLAY_NAME}</title>
       <AuthBoot>
         <div className="flex h-screen overflow-hidden bg-shell">
           <AppSidebar mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} />
@@ -53,8 +52,6 @@ export default function AppLayout() {
                   <Outlet />
                 </Suspense>
               </main>
-              {/* The AI chat — a sibling of <main>, on the shell, outside the panel. */}
-              <ChatDock />
             </div>
           </div>
         </div>
