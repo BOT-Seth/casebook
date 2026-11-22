@@ -22,6 +22,7 @@ import { callAction, useMyAttempts, type AttemptRecord } from '../../../lib/atte
 import { CaseHeader, ExhibitCard, KeyFacts, ResultRow, ScoreChip, Stepper, Timer } from '../../../components/case/Workspace'
 import { AnalyzePart, ClarifyPart, RecommendPart, StructurePart } from '../../../components/case/Parts'
 import { band, ModelAnswer, Scorecard } from '../../../components/case/Results'
+import { CaseDiscussion } from '../../../components/case/Discussion'
 import { cn } from '../../../lib/utils'
 
 export default function CasePage() {
@@ -74,7 +75,8 @@ function CaseView({ c }: { c: CaseSummary }) {
     return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading case…</div>
   }
   if (!selected) return <CaseIntro c={c} past={mine} onStart={start} starting={starting} />
-  return <Workspace c={c} attempt={selected} onRetry={start} retrying={starting} />
+  const finishedOnce = mine.some((a) => a.data.status === 'completed')
+  return <Workspace c={c} attempt={selected} onRetry={start} retrying={starting} canDiscuss={finishedOnce} />
 }
 
 function Workspace({
@@ -82,15 +84,17 @@ function Workspace({
   attempt,
   onRetry,
   retrying,
+  canDiscuss,
 }: {
   c: CaseSummary
   attempt: AttemptRecord
   onRetry: () => void
   retrying: boolean
+  canDiscuss: boolean
 }) {
   const a = attempt.data
   const done = a.status === 'completed'
-  const [tab, setTab] = useState<'case' | 'model'>('case')
+  const [tab, setTab] = useState<'case' | 'model' | 'discuss'>('case')
   useEffect(() => setTab(done ? 'model' : 'case'), [done, attempt.recordId])
 
   return (
@@ -108,11 +112,18 @@ function Workspace({
           <Tab active={tab === 'model'} onClick={() => setTab('model')} disabled={!done}>
             Model answer {!done && <Lock className="size-3" />}
           </Tab>
-          <Tab active={false} disabled title="Discussion opens after you finish the case">
-            <MessageSquare className="size-3.5" /> Discuss
+          <Tab
+            active={tab === 'discuss'}
+            onClick={() => setTab('discuss')}
+            disabled={!canDiscuss}
+            title="Discussion opens after you finish this case, so nobody spoils it for you"
+          >
+            <MessageSquare className="size-3.5" /> Discuss {!canDiscuss && <Lock className="size-3" />}
           </Tab>
         </div>
-        {tab === 'model' && done ? (
+        {tab === 'discuss' && canDiscuss ? (
+          <CaseDiscussion caseId={c.id} caseTitle={c.title} />
+        ) : tab === 'model' && done ? (
           <ModelAnswer attempt={a} />
         ) : (
           <>

@@ -12,10 +12,13 @@ import { usersSchema } from './schemas/users-schema'
 import { settingsSchema } from './schemas/admin-schema'
 import { attemptsSchema } from './schemas/attempts-schema'
 import { leaderboardSchema } from './schemas/leaderboard-schema'
+import { messagingSchemas } from './schemas/messaging-schema'
 
 export const schemas: CollectionSchema[] = [
   usersSchema,
   settingsSchema,
   attemptsSchema,
   leaderboardSchema,
+  // Per-case Discuss tab: channels live here; messages live in chat:<channelId> rooms.
+  ...messagingSchemas,
 ]
