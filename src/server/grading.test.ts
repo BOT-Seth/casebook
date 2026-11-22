@@ -51,3 +51,20 @@ describe('case data', () => {
     expect(evaluate('12000 * 0.8 / 0.2')).toBe(HIDDEN_CASES.clarion.answer.value)
   })
 })
+
+describe('part scoring', () => {
+  it('scores Part 1 by key facts uncovered', async () => {
+    const { scoreClarify } = await import('./grading')
+    expect(scoreClarify([0, 2, 3], [0, 2, 3], 10)).toBe(10)
+    expect(scoreClarify([1, 2], [0, 2, 3], 10)).toBe(3)
+    expect(scoreClarify([], [0, 2, 3], 10)).toBe(0)
+  })
+  it('scores checkpoint parts with equal weight', async () => {
+    const { scoreCheckpoints } = await import('./grading')
+    expect(scoreCheckpoints([true, true, true, false], 30)).toBe(23)
+    expect(scoreCheckpoints([true, true, true, true], 30)).toBe(30)
+  })
+  it('every case has 3 key facts', () => {
+    for (const [id, c] of Object.entries(HIDDEN_CASES)) expect(c.facts.filter((f) => f.key).length, id).toBe(3)
+  })
+})

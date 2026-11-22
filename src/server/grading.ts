@@ -38,6 +38,19 @@ export function judgeNumber(
   return { points: 0, correct: false, close: false, offByPct }
 }
 
+/** Part 1: share of the case's key facts your questions uncovered. */
+export function scoreClarify(revealed: number[], keyFactIdx: number[], maxPoints: number): number {
+  if (keyFactIdx.length === 0) return 0
+  const found = keyFactIdx.filter((i) => revealed.includes(i)).length
+  return Math.round((maxPoints * found) / keyFactIdx.length)
+}
+
+/** Checkpoint-graded parts: equal weight per checkpoint. */
+export function scoreCheckpoints(hits: boolean[], maxPoints: number): number {
+  if (hits.length === 0) return 0
+  return Math.round((maxPoints * hits.filter(Boolean).length) / hits.length)
+}
+
 export function formatAnswer(value: number, unit: string): string {
   const rounded = Math.abs(value) >= 1000 ? Math.round(value).toLocaleString('en-US') : String(Math.round(value * 10) / 10)
   if (unit === '$M') return `$${rounded}M`

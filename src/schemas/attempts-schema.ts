@@ -46,8 +46,12 @@ export interface AttemptRow {
   totalScore: number
   /** Copied in by the server only when Part 3 opens. */
   exhibit: ExhibitData | null
-  /** Facts the interviewer has revealed so far (Part 1). */
+  /** Labels of facts the interviewer has revealed so far (Part 1), for the board. */
   facts: string[]
+  /** Indexes into the hidden fact list that have been revealed (for scoring). */
+  factIdx: number[]
+  /** Part 1 conversation with the AI interviewer. */
+  qa: Array<{ q: string; a: string }>
   startedAt: string
   completedAt: string
 }
@@ -68,6 +72,8 @@ export const attemptsSchema: CollectionSchema = {
     { name: 'totalScore', storage: 'number', interpretation: 'plain', default: 0 },
     { name: 'exhibit', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'facts', storage: 'text', interpretation: { kind: 'json' } },
+    { name: 'factIdx', storage: 'text', interpretation: { kind: 'json' } },
+    { name: 'qa', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'startedAt', storage: 'text', interpretation: { kind: 'datetime' } },
     { name: 'completedAt', storage: 'text', interpretation: { kind: 'datetime' } },
   ],

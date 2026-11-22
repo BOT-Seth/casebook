@@ -159,6 +159,25 @@ finance and PM case interviews, built on DeepSpace.
   split workspace full width. Rebuilding it as a top bar adds risk for no product gain.
 - **Tradeoff:** slightly less "LeetCode-like" than the mockup.
 
+## 18. Part 1 is scored by code, not by the AI
+- **Chose:** the interviewer AI only reports *which facts it revealed*. Part 1's score is computed in code: the share
+  of the case's 3 key facts your questions uncovered.
+- **Why:** "were your questions good?" becomes a measurable, consistent question, and it costs no extra AI call. The
+  AI also can't put invented facts on the board, because code maps its fact numbers to the hidden list.
+- **Tradeoff:** a clever question that uncovers nothing *on the fact sheet* earns nothing. The fact sheet defines
+  what's knowable.
+
+## 19. Don't reveal which key facts you missed until the case is over
+- **Chose:** after Part 1 you see "2 of 3 key facts uncovered", but not which one you missed.
+- **Why:** naming the missed fact would hand you the answer before you've structured the problem.
+- **Tradeoff:** less immediate feedback. You find out on the results page.
+
+## 20. Generous AI output budget, plus one retry
+- **Found:** Haiku 5.5 reasons before answering, and those tokens count toward the output limit. A 600-token limit
+  truncated the JSON in testing.
+- **Chose:** a 3,000-token limit and one automatic retry.
+- **Tradeoff:** none on cost (you pay for tokens used, not the limit). A rare retry adds a few seconds.
+
 ## 14. Leaderboard
 - **Chose:** a leaderboard of total best scores across cases.
 - **How:** a separate `leaderboard` table that **only the server writes**, holding just display name and score.

@@ -1,8 +1,7 @@
 /**
  * HIDDEN case data: Worker-only. Never import this from src/pages or
  * src/components. Anything here is visible to anyone who can read the
- * browser bundle if it leaks into it; src/cases/catalog.test.ts fails the
- * build if it does.
+ * browser bundle if it leaks into it; `npm run check:bundle` fails if it does.
  *
  * The full write-up of every case (and why the numbers are what they are)
  * is in CASES.md at the repo root.
@@ -17,9 +16,18 @@ export interface Exhibit {
   note?: string
 }
 
+export interface Fact {
+  /** Short chip shown on the "Key facts discovered" board once revealed. */
+  label: string
+  /** The full fact the interviewer can share. */
+  detail: string
+  /** Key facts are what Part 1 is scored on: did your questions uncover them? */
+  key?: boolean
+}
+
 export interface HiddenCase {
   /** Facts the interviewer may reveal when asked in Part 1. */
-  facts: string[]
+  facts: Fact[]
   /** What a strong framework covers (Part 2). */
   structureCheckpoints: string[]
   exhibit: Exhibit
@@ -39,11 +47,11 @@ export const RECOMMENDATION_CHECKPOINTS = [
 export const HIDDEN_CASES: Record<string, HiddenCase> = {
   'harvest-lane': {
     facts: [
-      'Store count unchanged at 42; prices unchanged; customer traffic flat.',
-      'An Aldi opened 6 stores nearby in 2024, but revenue did not drop.',
-      'In January 2024 Harvest Lane closed its own distribution center in Fort Wayne and moved to a third-party logistics provider, MidStates Logistics, on a 3-year contract.',
-      'Fresh-produce deliveries went from daily to 3 times per week after the switch.',
-      'Labor and rent are stable. The goal is net margin of at least 2% within 2 years.',
+      { label: 'Stores, prices and traffic flat', detail: 'Store count unchanged at 42; prices unchanged; customer traffic flat.', key: true },
+      { label: 'Aldi opened 6 stores nearby', detail: 'An Aldi opened 6 stores nearby in 2024, but revenue did not drop.' },
+      { label: 'Switched to a 3PL in Jan 2024', detail: 'In January 2024 Harvest Lane closed its own distribution center in Fort Wayne and moved to a third-party logistics provider, MidStates Logistics, on a 3-year contract.', key: true },
+      { label: 'Fresh deliveries: daily to 3x/week', detail: 'Fresh-produce deliveries went from daily to 3 times per week after the logistics switch.', key: true },
+      { label: 'Goal: margin of 2%+ in 2 years', detail: 'Labor and rent are stable. The goal is net margin of at least 2% within 2 years.' },
     ],
     structureCheckpoints: [
       'Splits profit into revenue and costs',
@@ -79,13 +87,13 @@ export const HIDDEN_CASES: Record<string, HiddenCase> = {
 
   voltpath: {
     facts: [
-      'VoltPath has $20M available for expansion and wants positive ROI within 5 years.',
-      'California hubs run at 82% average utilization.',
-      'Projected fleet EVs in Houston and Dallas in 2027: 18,000 delivery vans and trucks.',
-      '40% of those fleets (Amazon, FedEx and similar) charge at their own depots, so they are not addressable.',
-      'Two competitors already hold contracts with about 35% of the addressable fleets.',
-      'Texas power (ERCOT) is cheaper but more price-volatile than California power. Texas has no state fleet-EV mandate.',
-      'A regional grocery-delivery fleet with 150 vans has signaled interest in a Houston contract.',
+      { label: '$20M budget, ROI within 5 years', detail: 'VoltPath has $20M available for expansion and wants positive ROI within 5 years.', key: true },
+      { label: 'California hubs at 82% utilization', detail: 'California hubs run at 82% average utilization.' },
+      { label: '18,000 fleet EVs in Houston + Dallas', detail: 'Projected fleet EVs in Houston and Dallas in 2027: 18,000 delivery vans and trucks.' },
+      { label: '40% of fleets charge at own depots', detail: '40% of those fleets (Amazon, FedEx and similar) charge at their own depots, so they are not addressable.', key: true },
+      { label: 'Competitors hold 35% of contracts', detail: 'Two competitors already hold contracts with about 35% of the addressable fleets.', key: true },
+      { label: 'ERCOT power: cheaper but volatile', detail: 'Texas power (ERCOT) is cheaper but more price-volatile than California power. Texas has no state fleet-EV mandate.' },
+      { label: '150-van fleet interested in Houston', detail: 'A regional grocery-delivery fleet with 150 vans has signaled interest in a Houston contract.' },
     ],
     structureCheckpoints: [
       'Market attractiveness: size, growth and competition',
@@ -119,12 +127,12 @@ export const HIDDEN_CASES: Record<string, HiddenCase> = {
 
   clarion: {
     facts: [
-      "Northwind's budget is up to $50M and it wants the deal closed this year.",
-      "Clarion's ARR is growing 25% per year. Its customers are mostly small businesses.",
-      "30% of Clarion's customers already use Northwind's CRM.",
-      'Northwind has 5,000 customers it could cross-sell analytics to.',
-      'Comparable SaaS deals: 4-6x ARR for companies with about 20% churn; about 8x ARR for companies under 10% churn.',
-      "Clarion's founders are willing to stay for 1 year after a deal.",
+      { label: 'Budget up to $50M, close this year', detail: "Northwind's budget is up to $50M and it wants the deal closed this year." },
+      { label: 'ARR +25%/yr, mostly small businesses', detail: "Clarion's ARR is growing 25% per year. Its customers are mostly small businesses." },
+      { label: '30% of customers already on Northwind', detail: "30% of Clarion's customers already use Northwind's CRM.", key: true },
+      { label: '5,000 Northwind customers to cross-sell', detail: 'Northwind has 5,000 customers it could cross-sell analytics to.', key: true },
+      { label: 'Comps: 4-6x ARR at ~20% churn', detail: 'Comparable SaaS deals: 4-6x ARR for companies with about 20% churn; about 8x ARR for companies under 10% churn.', key: true },
+      { label: 'Founders stay 1 year', detail: "Clarion's founders are willing to stay for 1 year after a deal." },
     ],
     structureCheckpoints: [
       'Standalone value of the target: revenue, growth, churn, unit economics',

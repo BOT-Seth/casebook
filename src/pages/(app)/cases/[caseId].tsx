@@ -125,28 +125,20 @@ function CurrentPart({ attempt, c }: { attempt: AttemptRecord; c: CaseSummary })
   const a = attempt.data
   switch (a.currentPart) {
     case 1:
-      return (
-        <TextPart
-          key="part-1"
-          attemptId={attempt.recordId}
-          part={1}
-          title="Clarify"
-          hint="What would you ask the interviewer before structuring? (Slice 2: the AI interviewer answers live.)"
-          placeholder="e.g. Has the store count or pricing changed? What is the client's margin target?"
-          cta="Continue to Structure"
-        />
-      )
+      return <ClarifyPart key="part-1" attempt={attempt} />
     case 2:
       return (
         <TextPart
           key="part-2"
           attemptId={attempt.recordId}
+          action="submitStructure"
           part={2}
           title="Structure"
-          hint="Lay out your framework or issue tree. (Slice 2: graded against hidden checkpoints.)"
+          hint="Lay out your framework or issue tree. It's graded against the checkpoints a strong answer covers."
           placeholder={'Profit = Revenue − Costs\n  Revenue: price × volume …\n  Costs: …'}
           cta="Submit structure"
-          rows={8}
+          busyLabel="Grading…"
+          rows={9}
         />
       )
     case 3:
@@ -167,11 +159,13 @@ function CurrentPart({ attempt, c }: { attempt: AttemptRecord; c: CaseSummary })
 
 function TextPart(props: {
   attemptId: string
-  part: 1 | 2
+  action: string
+  part: number
   title: string
   hint: string
   placeholder: string
   cta: string
+  busyLabel?: string
   rows?: number
 }) {
   const { error } = useToast()
@@ -180,7 +174,7 @@ function TextPart(props: {
   async function submit() {
     setBusy(true)
     try {
-      await callAction('submitPart', { attemptId: props.attemptId, part: props.part, text })
+      await callAction(props.action, { attemptId: props.attemptId, text })
     } catch (e) {
       error('Could not submit', e instanceof Error ? e.message : String(e))
       setBusy(false)
@@ -192,8 +186,130 @@ function TextPart(props: {
       <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={props.rows ?? 4} placeholder={props.placeholder} />
       <div className="flex justify-end">
         <Button onClick={submit} loading={busy} disabled={!text.trim()}>
-          {props.cta}
+          {busy && props.busyLabel ? props.busyLabel : props.cta}
         </Button>
+      </div>
+    </div>
+  )
+}
+
+const MAX_QUESTIONS = 3
+
+/**
+ * Part 1: a short conversation with the AI interviewer. Each answer comes from
+ * the server action; the transcript and the "Key facts" board both render from
+ * the live attempt record, not from local state.
+ */
+function ClarifyPart({ attempt }: { attempt: AttemptRecord }) {
+  const { error } = useToast()
+  const [question, setQuestion] = useState('')
+  const [asking, setAsking] = useState(false)
+  const [finishing, setFinishing] = useState(false)
+  const [pending, setPending] = useState<string | null>(null)
+  const qa = attempt.data.qa ?? []
+  const left = MAX_QUESTIONS - qa.length
+
+  async function ask() {
+    const q = question.trim()
+    if (!q) return
+    setAsking(true)
+    setPending(q)
+    setQuestion('')
+    try {
+      await callAction('askQuestion', { attemptId: attempt.recordId, question: q })
+    } catch (e) {
+      error('The interviewer could not answer', e instanceof Error ? e.message : String(e))
+      setQuestion(q)
+    } finally {
+      setPending(null)
+      setAsking(false)
+    }
+  }
+
+  async function finish() {
+    setFinishing(true)
+    try {
+      await callAction('finishClarify', { attemptId: attempt.recordId })
+    } catch (e) {
+      error('Could not continue', e instanceof Error ? e.message : String(e))
+      setFinishing(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <PartHeading
+        n={1}
+        title="Clarify"
+        hint={`Ask the interviewer up to ${MAX_QUESTIONS} questions before you structure. Good questions uncover the facts that matter.`}
+      />
+      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+        <Bubble who="interviewer">
+          Thanks for coming in. You&apos;ve read the situation. What would you like to know before you structure your
+          approach?
+        </Bubble>
+        {qa.map((x, i) => (
+          <div key={i} className="space-y-3">
+            <Bubble who="you">{x.q}</Bubble>
+            <Bubble who="interviewer">{x.a}</Bubble>
+          </div>
+        ))}
+        {pending && (
+          <>
+            <Bubble who="you">{pending}</Bubble>
+            <Bubble who="interviewer">
+              <span className="text-muted-foreground">Thinking…</span>
+            </Bubble>
+          </>
+        )}
+      </div>
+      {left > 0 ? (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void ask()
+          }}
+        >
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            maxLength={500}
+            placeholder="Ask a clarifying question…"
+            aria-label="Your question"
+            disabled={asking}
+            className="h-10 flex-1 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+          />
+          <Button type="submit" variant="outline" loading={asking} disabled={!question.trim()}>
+            Ask
+          </Button>
+        </form>
+      ) : (
+        <p className="text-sm text-muted-foreground">You&apos;ve used all {MAX_QUESTIONS} questions.</p>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-xs text-muted-foreground">
+          {left} of {MAX_QUESTIONS} questions left
+        </span>
+        <Button onClick={finish} loading={finishing} disabled={asking}>
+          Continue to Structure
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function Bubble({ who, children }: { who: 'you' | 'interviewer'; children: React.ReactNode }) {
+  const mine = who === 'you'
+  return (
+    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+          mine ? 'bg-primary text-primary-foreground' : 'border border-border bg-card'
+        }`}
+      >
+        {!mine && <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Interviewer</p>}
+        {children}
       </div>
     </div>
   )
