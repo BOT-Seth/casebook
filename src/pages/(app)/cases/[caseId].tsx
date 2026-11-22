@@ -40,7 +40,12 @@ export default function CasePage() {
       </div>
     )
   }
-  return isSignedIn ? <CaseView c={c} /> : <SignedOutIntro c={c} />
+  return (
+    <>
+      <title>{`${c.title} · Casebook`}</title>
+      {isSignedIn ? <CaseView c={c} /> : <SignedOutIntro c={c} />}
+    </>
+  )
 }
 
 function CaseView({ c }: { c: CaseSummary }) {
@@ -135,7 +140,13 @@ function Workspace({
       </section>
 
       {/* Right: the four parts, or the scorecard */}
-      <section className="min-w-0 space-y-4 self-start rounded-xl border border-border bg-card p-4 sm:p-5">
+      <section
+        className={cn(
+          'min-w-0 space-y-4 self-start rounded-xl border border-border bg-card p-4 sm:p-5',
+          // Finished: on a phone, the scorecard comes before the long model answer.
+          done && 'order-first lg:order-none',
+        )}
+      >
         {!done && (
           <>
             <div className="flex flex-wrap items-center gap-3">

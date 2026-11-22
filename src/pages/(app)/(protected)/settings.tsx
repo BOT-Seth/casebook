@@ -5,6 +5,7 @@
 
 import { signOut, useUser } from 'deepspace'
 import { Button } from '@/components/ui'
+import { publicName } from '../../../lib/names'
 
 export default function SettingsPage() {
   const { user } = useUser()
@@ -14,8 +15,9 @@ export default function SettingsPage() {
     // (app)/_layout provides (a plain background, or a raised panel), so they
     // stay transparent and inherit it.
     <div className="min-h-full text-foreground">
-      <div className="mx-auto max-w-2xl px-6 py-20">
-        <h1 className="mb-12 text-4xl font-bold tracking-tight">Settings</h1>
+      <div className="mx-auto max-w-2xl px-6 py-10">
+        <title>Settings · Casebook</title>
+        <h1 className="mb-8 text-2xl font-semibold tracking-tight">Settings</h1>
 
         <section className="rounded-lg border border-border bg-card p-6">
           <h2 className="mb-4 text-lg font-semibold">Your account</h2>
@@ -28,6 +30,10 @@ export default function SettingsPage() {
             <div>
               <dt className="text-muted-foreground">Email</dt>
               <dd className="text-foreground">{user?.email ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Shown on the leaderboard as</dt>
+              <dd className="text-foreground">{publicName(user?.name)}</dd>
             </div>
           </dl>
 

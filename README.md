@@ -5,7 +5,7 @@ You work a business case one part at a time, and every part is graded against hi
 
 **Live:** https://casebook.app.space · Built on [DeepSpace](https://docs.deep.space)
 
-![Case workspace](docs/screenshots/readme-workspace.png)
+![A case in progress: exhibit unlocked, Parts 1-2 graded, Part 3 with the calculator](docs/screenshots/readme-workspace.png)
 
 ## How a case works
 
@@ -17,6 +17,8 @@ Each case is four parts worth 100 points, played in order, one submission each:
 | 2. Structure | Lay out your framework / issue tree | **AI judge** marks each hidden checkpoint hit or missed; code turns that into points | 30 |
 | 3. Analyze | Read the exhibit (unlocks now), compute one number, say what it means | Number checked **exactly by code** (±2% full, ±10% half); the "so what" by the AI judge | 30 |
 | 4. Recommend | Give the CEO a top-down answer | AI judge: the case's "right call" + answer-first, numbers, risks, next steps | 30 |
+
+![Scorecard and model answer](docs/screenshots/readme-scorecard.png)
 
 When you finish you get a scorecard (score band, points per part, which key facts you found or missed), the model
 answer, and the per-case **Discuss** tab. Your history is on **Progress**, and best scores go on a public **Leaderboard**.

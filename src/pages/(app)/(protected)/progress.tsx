@@ -43,6 +43,7 @@ export default function ProgressPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
+      <title>Progress · Casebook</title>
       <h1 className="text-2xl font-semibold tracking-tight">Progress</h1>
       <p className="mt-1 text-sm text-muted-foreground">Across every case you&apos;ve finished.</p>
 

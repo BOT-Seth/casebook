@@ -24,6 +24,9 @@ import { formatAnswer, judgeNumber, parseNumber, scoreCheckpoints, scoreClarify 
 import { AiError, askInterviewer, judgeAgainstCheckpoints, type JudgeResult } from '../server/ai'
 import type { AttemptReview, AttemptRow, PartResult } from '../schemas/attempts-schema'
 import type { LeaderboardRow } from '../schemas/leaderboard-schema'
+import { publicName } from '../lib/names'
+
+export { publicName }
 
 type Attempt = { recordId: string; data: AttemptRow }
 
@@ -118,12 +121,6 @@ async function saveResult(tools: ActionTools, attempt: Attempt, part: number, re
   return updated.success ? results : null
 }
 
-/** "Mohammed Altaie" → "Mohammed A." (the leaderboard shows no more than that). */
-export function publicName(full: unknown): string {
-  const parts = typeof full === 'string' ? full.trim().split(/\s+/).filter(Boolean) : []
-  if (parts.length === 0) return 'Anonymous'
-  return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`
-}
 
 /**
  * The caller's display name from their JWT. The action route has already
@@ -270,7 +267,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
       submitted: (a.qa ?? []).map((x) => x.q).join('\n'),
       verdict: `${found.length} of ${keyIdx.length} key facts uncovered`,
       hits: found.map((i) => hidden.facts[i].label),
-      misses: missed > 0 ? [`${missed} key fact${missed === 1 ? '' : 's'} not uncovered (revealed when the case is over)`] : [],
+      misses: missed > 0 ? [`${missed} key fact${missed === 1 ? '' : 's'} not uncovered (they're listed on your scorecard when you finish)`] : [],
       feedback:
         asked === 0
           ? 'You skipped clarifying questions. In a real interview, two or three sharp questions before structuring often change the answer.'
