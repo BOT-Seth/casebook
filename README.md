@@ -1,72 +1,86 @@
 # Casebook
 
-A spaced-repetition notebook for coding-interview problems, built on [DeepSpace](https://docs.deep.space).
+**LeetCode for case interviews.** Practice consulting, finance and PM case interviews in the real interview format.
+You work a business case one part at a time, and every part is graded against hidden checkpoints.
 
-You write up a problem you have solved once (prompt, approach, complexity, pitfalls). Later, a **drill** shows
-only the prompt and you explain the solution from memory. An **AI coach** compares your answer with your own
-write-up and tells you what you covered and what you missed, then suggests a grade. **You** pick the grade, and
-an SM-2 scheduler decides when you see the case again: ten minutes if you blanked, days or weeks if it was solid.
+**Live:** https://casebook.app.space · Built on [DeepSpace](https://docs.deep.space)
 
-Cases are private by default. Turn on **Share in Library** and anyone (even signed out) can read the case
-and save a copy into their own casebook.
+![Case workspace](docs/screenshots/readme-workspace.png)
 
-**Live:** https://casebook.app.space
+## How a case works
 
-## The main path
+Each case is four parts worth 100 points, played in order, one submission each:
 
-1. Sign in, then on **Today** click **Add 6 starter cases**. Or write your own, or save one from the **Library**.
-2. Click **Start drill**. Read the prompt and type your approach from memory.
-3. Click **Check with coach**. You'll see the verdict, what you covered and missed, and your saved answer.
-4. Pick a grade. Each button shows the next interval it would schedule. The case moves to its new due date,
-   and the attempt is logged on the case page and on Today.
-5. Or use the chat panel instead: *"quiz me on something due"* → the assistant calls `cases_due`, asks you,
-   grades you, and calls `review_case`.
+| Part | You | How it's graded | Pts |
+| --- | --- | --- | --- |
+| 1. Clarify | Ask an AI interviewer up to 3 questions | **Code** counts how many of the case's 3 key facts your questions uncovered | 10 |
+| 2. Structure | Lay out your framework / issue tree | **AI judge** marks each hidden checkpoint hit or missed; code turns that into points | 30 |
+| 3. Analyze | Read the exhibit (unlocks now), compute one number, say what it means | Number checked **exactly by code** (±2% full, ±10% half); the "so what" by the AI judge | 30 |
+| 4. Recommend | Give the CEO a top-down answer | AI judge: the case's "right call" + answer-first, numbers, risks, next steps | 30 |
 
-## How it uses DeepSpace
+When you finish you get a scorecard (score band, points per part, which key facts you found or missed), the model
+answer, and the per-case **Discuss** tab. Your history is on **Progress**, and best scores go on a public **Leaderboard**.
 
-| Piece | Where | Why |
-| --- | --- | --- |
-| **Collections + server-side RBAC** | `src/schemas/cases-schema.ts` | `cases` uses `read: 'published'` with `visibilityField: visibility = 'public'`. Members see their own cases plus public ones, signed-out visitors see only public ones, and only the author can edit. `attempts` are `read: 'own'` and can't be updated, so the review log is append-only. The Library page is a plain `useQuery` because the RecordRoom Durable Object filters rows before they leave the worker. |
-| **Real-time records** | `useQuery` / `useMutations` throughout | Grading in one tab, or the chat assistant editing a case, updates every open view with no refetch code. The case editor saves one field at a time with merge `put`s, so concurrent edits to different fields don't overwrite each other. |
-| **Server action** | `src/actions/index.ts` → `coachRecall` | Grades your answer on the server against your saved approach. Action tools run with RBAC off, so the action checks `createdBy === userId` itself before reading a case. |
-| **AI through the integration proxy** | `src/server/coach.ts` | `createDeepSpaceAI` + `generateText` with a Zod `Output.object` schema, so the verdict is typed JSON, not parsed prose. The caller's JWT is forwarded, so **the person practising pays for their own coaching**, not the app owner. No provider API key lives in the app. |
-| **AI chat dock with custom tools** | `src/ai/casebook-tools.ts`, `src/ai/tools.ts` | `cases_due` (withholds the saved approach so the model can quiz without spoiling it) and `review_case` (runs the same SM-2 function, so the model can't invent intervals). Both run through the user-scoped executor, so RBAC still applies to the assistant. The same tools are exposed to local coding agents through `npx deepspace agent invoke`. |
-| **One scheduler, three callers** | `src/lib/srs.ts` + `srs.test.ts` | A pure function used by the drill page, the chat tool and the unit tests. |
+The three launch cases (profitability, market entry, M&A) are original. They're modeled on published practice-case
+formats, and every number is hand-checked so the math can be graded right or wrong. The write-ups are in
+[CASES.md](CASES.md).
 
-### Integrations deliberately left out
+## How it's built on DeepSpace
 
-- **Email or calendar reminders (Google / Composio):** the obvious next feature is a daily digest of due cases,
-  using the cron room. I left it out because it needs per-user OAuth consent, and the review queue on Today
-  already covers the loop. Adding it would add a sign-up hurdle without improving the core learning loop.
-- **Yjs collaborative editing:** a case is short, structured fields written by one author. Field-level merge
-  `put`s give live updates without CRDT text, which only pays off for long co-authored documents.
-- **Payments, file uploads, managed knowledge base:** nothing in the product needs them. Cases are short text, and
-  the coach only ever needs one case at a time, so retrieval adds nothing.
+| DeepSpace primitive | Used for |
+| --- | --- |
+| **Auth** (`DeepSpaceAuthProvider`, `AuthOverlay`) | Sign-in with Google, GitHub or email. No auth code written. |
+| **Collections + schemas** (`src/schemas/`) | `attempts` (private), `leaderboard` (public), plus the messaging collections |
+| **RBAC in the RecordRoom** | `attempts`: members read **their own** and write **nothing**. `leaderboard`: everyone reads, nobody writes. Only server actions write either. |
+| **Real-time queries** (`useQuery`) | The stepper, score, unlocked exhibit, facts board and leaderboard all update the instant the server writes. No refresh or polling code. |
+| **Server actions** (`src/actions/index.ts`) | The only code that advances a case. Each one checks ownership and part order, then grades. |
+| **AI integration proxy** (`createDeepSpaceAI`) | Claude Haiku 5.5 with structured (Zod) output for the interviewer and the judge. No API key in the app; billed to the app owner's credits. |
+| **Messaging feature** (`npx deepspace add messaging`) | Per-case Discuss channels with threads and reactions. Messages live in their own `chat:<channelId>` rooms. |
+| **Worker-only modules** | Fact sheets, exhibits, answers and model answers (`src/server/cases`) never reach the browser. `npm run check:bundle` fails if they do. |
+| **Deploy** (`npx deepspace deploy`) | Frontend, worker and database to `casebook.app.space` |
+| **Testing** (`npx deepspace test`, test accounts) | Two-user Playwright specs for privacy and anti-cheat (`tests/casebook.spec.ts`) |
 
-## Main tradeoff
+Not used, on purpose:
+- **Yjs, presence, canvas:** practice is solo.
+- **Background jobs:** each AI call takes a few seconds and fits in a request.
+- **Cron and email:** reminders are the next feature, not core.
+- **Files, payments, knowledge base:** the cases are fixed and the app is free.
 
-**The AI suggests a grade, the human decides.** Letting the coach set the grade would make drills one click
-faster. But an LLM grade on free text is noisy, and the whole value of spaced repetition is an honest schedule.
-So the coach returns a structured verdict, the saved answer is revealed next to it, and the person chooses.
-You can also skip the coach entirely ("Just show my answer"), so the app still works if the AI call fails or
-costs too much.
+## Security model, in one paragraph
 
-A smaller one: the scheduler runs **client-side** in the drill page (with the same function on the server for
-the chat tool) rather than in a server action. A user could fake their own schedule, but it's only their own
-data, and that saves a round-trip on every grade.
+The browser can read only your own attempts and can't write them at all. Every state change (next part, unlocked
+exhibit, score) goes through a server action that checks the attempt is yours and is on the right part. Hidden case
+data lives in worker-only modules, and the model answer is written onto your attempt only after you finish. The AI
+never decides a score directly. It returns structured hits and misses (or which facts it revealed), and code turns
+those into points. Candidate text is passed to the model inside tags and treated as data, not instructions. All of
+this was checked by hand and is covered by the Playwright specs (see [PROGRESS.md](PROGRESS.md)).
 
-## Running it
+## Cost
+
+Owner-billed AI on the free tier: at most 6 Haiku calls per case and 8 new cases per user per day. A full case
+costs well under a cent (measured: 5 calls = $0.0015).
+
+## Run it
 
 ```sh
 npm install
 npx deepspace auth login
-npx deepspace dev start        # http://localhost:5173
-npm run test:unit              # SRS scheduler tests
+npx deepspace dev start          # http://localhost:5173
+npm run test:unit                # grading, calculator, case-math tests
+npm run check:bundle             # build + fail if hidden case data leaks into the client
+npx deepspace test run all       # Playwright, incl. two-user privacy / anti-cheat specs
 npx deepspace deploy
 ```
 
-## What's not done / next
+## More
 
-- A daily due-cases email through the cron room and the `email/send` integration (see above).
-- Pattern-level analytics: Today shows the most-forgotten pattern, but a per-pattern recall chart would be better.
-- A Library moderation and report flow before sharing is opened to strangers at scale.
+- [DECISIONS.md](DECISIONS.md): every decision we changed our mind on, and what it cost
+- [PROGRESS.md](PROGRESS.md): what each build slice added and how it was verified
+- [CASES.md](CASES.md): the three cases, hidden facts, worked math and model answers
+
+## What's next
+
+- More cases. Each one is a public summary in `src/cases/catalog.ts` plus a hidden write-up in
+  `src/server/cases/index.ts`; the bundle check and case-math unit test guard both.
+- An AI interviewer that asks follow-up questions during Part 2, not just Part 1.
+- Weekly "cases you haven't tried" email via the cron room and the email integration.
