@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { formatAnswer, judgeNumber, parseNumber } from './grading'
+import { formatAnswer, judgeNumber, parseAnswer } from './grading'
 import { evaluate } from '../lib/calc'
 import { CASES } from '../cases/catalog'
 import { HIDDEN_CASES } from './cases'
 
-describe('parseNumber', () => {
-  it('reads the formats people type', () => {
-    expect(parseNumber('18')).toBe(18)
-    expect(parseNumber('$18.0M')).toBe(18)
-    expect(parseNumber('48,000')).toBe(48000)
-    expect(parseNumber('$48k')).toBe(48000)
-    expect(parseNumber('233 vans')).toBe(233)
-    expect(parseNumber('about 18')).toBeNull()
-    expect(parseNumber('')).toBeNull()
+describe('parseAnswer', () => {
+  it('reads $M answers in any form', () => {
+    for (const x of ['18', '$18M', '18m', '18 million', '$18,000,000', '18000000', '0.018b', '$18.0M']) {
+      expect(parseAnswer(x, '$M'), x).toBe(18)
+    }
+  })
+  it('reads $ answers in any form', () => {
+    for (const x of ['48000', '$48,000', '48k', '$0.048M', '48 thousand']) expect(parseAnswer(x, '$'), x).toBeCloseTo(48000)
+  })
+  it('reads counts', () => {
+    expect(parseAnswer('233 vans', 'vans')).toBe(233)
+    expect(parseAnswer('233.3', 'vans')).toBe(233.3)
+  })
+  it('rejects prose', () => {
+    expect(parseAnswer('about 18', '$M')).toBeNull()
+    expect(parseAnswer('', '$')).toBeNull()
   })
 })
 
@@ -76,5 +83,19 @@ describe('leaderboard names', () => {
     expect(publicName('Cher')).toBe('Cher')
     expect(publicName('  ')).toBe('Anonymous')
     expect(publicName(undefined)).toBe('Anonymous')
+  })
+})
+
+describe('leaderboard uses the first completed attempt per case', () => {
+  it('ignores later, higher retries and unfinished attempts', async () => {
+    const { firstAttemptScores } = await import('../actions/index')
+    const scores = firstAttemptScores([
+      { caseId: 'harvest-lane', status: 'completed', completedAt: '2026-11-20T10:00:00Z', totalScore: 55 },
+      { caseId: 'harvest-lane', status: 'completed', completedAt: '2026-11-21T10:00:00Z', totalScore: 100 },
+      { caseId: 'voltpath', status: 'in_progress', completedAt: '', totalScore: 40 },
+      { caseId: 'voltpath', status: 'completed', completedAt: '2026-11-21T09:00:00Z', totalScore: 70 },
+      { caseId: 'not-a-case', status: 'completed', completedAt: '2026-11-19T10:00:00Z', totalScore: 100 },
+    ])
+    expect(scores).toEqual({ 'harvest-lane': 55, voltpath: 70 })
   })
 })

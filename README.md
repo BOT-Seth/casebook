@@ -21,7 +21,7 @@ Each case is four parts worth 100 points, played in order, one submission each:
 ![Scorecard and model answer](docs/screenshots/readme-scorecard.png)
 
 When you finish you get a scorecard (score band, points per part, which key facts you found or missed), the model
-answer, and the per-case **Discuss** tab. Your history is on **Progress**, and best scores go on a public **Leaderboard**.
+answer, and the per-case **Discuss** tab. Your history is on **Progress**, and your first attempt at each case goes on a public **Leaderboard** (retries can't farm it, since a finished case shows the answer).
 
 The three launch cases (profitability, market entry, M&A) are original. They're modeled on published practice-case
 formats, and every number is hand-checked so the math can be graded right or wrong. The write-ups are in
@@ -59,7 +59,7 @@ this was checked by hand and is covered by the Playwright specs (see [PROGRESS.m
 
 ## Cost
 
-Owner-billed AI on the free tier: at most 6 Haiku calls per case and 8 new cases per user per day. A full case
+Owner-billed AI on the free tier: 6 Haiku calls per case (10 max, with retries) and 8 new cases per user per day. A full case
 costs well under a cent (measured: 5 calls = $0.0015).
 
 ## Run it

@@ -62,6 +62,13 @@ export interface AttemptRow {
   qa: Array<{ q: string; a: string }>
   /** Null until the case is complete; then the model answer and missed facts. */
   review: AttemptReview | null
+  /**
+   * Set while the server is grading a part (see claimPart in src/actions):
+   * a second submission for the same attempt is refused until it clears.
+   */
+  pending: { part: number; token: string; at: string } | null
+  /** AI calls made for this attempt, failed ones included. Capped. */
+  aiCalls: number
   startedAt: string
   completedAt: string
 }
@@ -85,6 +92,8 @@ export const attemptsSchema: CollectionSchema = {
     { name: 'factIdx', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'qa', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'review', storage: 'text', interpretation: { kind: 'json' } },
+    { name: 'pending', storage: 'text', interpretation: { kind: 'json' } },
+    { name: 'aiCalls', storage: 'number', interpretation: 'plain', default: 0 },
     { name: 'startedAt', storage: 'text', interpretation: { kind: 'datetime' } },
     { name: 'completedAt', storage: 'text', interpretation: { kind: 'datetime' } },
   ],

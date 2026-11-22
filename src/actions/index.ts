@@ -14,13 +14,27 @@
  *   submitAnalyze    → Part 3: number graded by code, "so what" by the judge
  *   submitRecommend  → Part 4 graded by the judge; completes the attempt,
  *                      writes the review, updates the leaderboard
+ *
+ * Concurrency. Each tools.* call is its own request to the RecordRoom, so a
+ * read-then-write is not atomic, and an AI call can take seconds in between.
+ * Without care, two parallel submissions could both pass the "right part"
+ * check, or a slow one could land after a later part and overwrite it (e.g.
+ * reopen Part 3 after its answer was shown). So every grading action:
+ *   1. claims the attempt: writes a `pending` marker with a random token
+ *      (refused if a fresh claim is already there) and counts its AI calls;
+ *   2. grades;
+ *   3. re-reads the attempt and saves ONLY if it is still on the same part
+ *      and still carries this request's token, merging into the fresh copy.
+ * Two requests racing for the same claim: the later token wins, and the
+ * earlier request is discarded at step 3. A true lock would need the writes
+ * to run inside one Durable Object (see DECISIONS.md #24).
  */
 
 import type { ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
-import { CASES, getCase, PARTS } from '../cases/catalog'
+import { CASES, getCase, PARTS, type CaseSummary } from '../cases/catalog'
 import { getHiddenCase, RECOMMENDATION_CHECKPOINTS, type HiddenCase } from '../server/cases'
-import { formatAnswer, judgeNumber, parseNumber, scoreCheckpoints, scoreClarify } from '../server/grading'
+import { formatAnswer, judgeNumber, parseAnswer, scoreCheckpoints, scoreClarify } from '../server/grading'
 import { AiError, askInterviewer, judgeAgainstCheckpoints, type JudgeResult } from '../server/ai'
 import type { AttemptReview, AttemptRow, PartResult } from '../schemas/attempts-schema'
 import type { LeaderboardRow } from '../schemas/leaderboard-schema'
@@ -34,12 +48,17 @@ const MAX_TEXT = 4_000
 const MAX_QUESTION = 500
 /** Part 1 allows this many questions to the AI interviewer. */
 const MAX_QUESTIONS = 3
-/**
- * New attempts a user may start per day (UTC). An attempt makes at most 6 AI
- * calls (3 questions + structure + so-what + recommendation), so this caps
- * owner-billed spend per user at well under a cent a day.
- */
+/** New attempts a user may start per day (UTC). */
 const DAILY_ATTEMPT_LIMIT = 8
+/**
+ * AI calls one attempt may make, failed ones included. A clean run uses 6
+ * (3 questions + structure + so-what + recommendation); the rest is headroom
+ * for retries after an AI error. With the daily limit this caps owner-billed
+ * spend at 8 × 10 calls per user per day (a couple of cents).
+ */
+const MAX_AI_CALLS_PER_ATTEMPT = 10
+/** A claim older than this is treated as abandoned (an AI call takes seconds). */
+const PENDING_TTL_MS = 90_000
 /** Points for the Part 3 number; the rest of Part 3 is the "so what". */
 const ANALYZE_NUMBER_POINTS = 20
 
@@ -62,8 +81,15 @@ async function loadOwnAttempt(tools: ActionTools, userId: string, attemptId: unk
   return record.data.userId === userId ? record : null
 }
 
+type Loaded = { attempt: Attempt; a: AttemptRow; summary: CaseSummary; hidden: HiddenCase }
+
 /** Loads the caller's attempt and checks it is in progress on `part`. */
-async function loadForPart(tools: ActionTools, userId: string, attemptId: unknown, part: number) {
+async function loadForPart(
+  tools: ActionTools,
+  userId: string,
+  attemptId: unknown,
+  part: number,
+): Promise<Loaded | { error: ActionResult<never> }> {
   const attempt = await loadOwnAttempt(tools, userId, attemptId)
   if (!attempt) return { error: fail('Attempt not found') }
   const a = attempt.data
@@ -74,6 +100,58 @@ async function loadForPart(tools: ActionTools, userId: string, attemptId: unknow
   if (!summary || !hidden) return { error: fail('Unknown case') }
   return { attempt, a, summary, hidden }
 }
+
+function claimIsLive(a: AttemptRow): boolean {
+  return !!a.pending && Date.now() - Date.parse(a.pending.at) < PENDING_TTL_MS
+}
+
+/** Step 1: mark the attempt as being graded, and count the AI calls this will make. */
+type Claim = { token: string } | { error: ActionResult<never> }
+
+async function claim(tools: ActionTools, loaded: Loaded, part: number, aiCalls: number): Promise<Claim> {
+  const { attempt, a } = loaded
+  if (claimIsLive(a)) return { error: fail('Still grading your last submission. Give it a moment.') }
+  const used = a.aiCalls ?? 0
+  if (aiCalls > 0 && used + aiCalls > MAX_AI_CALLS_PER_ATTEMPT) {
+    return { error: fail('This attempt has used its AI budget. Start a new attempt to keep practicing.') }
+  }
+  const token = crypto.randomUUID()
+  const updated = await tools.update('attempts', attempt.recordId, {
+    pending: { part, token, at: new Date().toISOString() },
+    aiCalls: used + aiCalls,
+  } as Record<string, unknown>)
+  if (!updated.success) return { error: fail('Could not save') }
+  // Read back before spending an AI call: if a parallel request claimed
+  // after us, its token is the one on the record and we back off. This
+  // shrinks the race to the gap between two writes; it is not a lock.
+  const check = await tools.get('attempts', attempt.recordId)
+  const now = check.success ? (check.data as unknown as { record: Attempt }).record.data : null
+  if (now?.pending?.token !== token) return { error: fail('Still grading your last submission. Give it a moment.') }
+  return { token }
+}
+
+/** Step 3: the attempt as it is now, if this request still owns the claim for `part`. */
+async function confirm(tools: ActionTools, userId: string, attemptId: string, part: number, token: string) {
+  const fresh = await loadOwnAttempt(tools, userId, attemptId)
+  if (!fresh) return null
+  const a = fresh.data
+  if (a.pending?.token !== token) return null
+  if (a.status !== 'in_progress' || a.currentPart !== part) {
+    // Our claim landed after the part was already saved: don't leave it
+    // behind as a lock on the next part.
+    await tools.update('attempts', attemptId, { pending: null } as Record<string, unknown>)
+    return null
+  }
+  return fresh
+}
+
+/** Drop our claim after a failed AI call, unless another request has taken over. */
+async function release(tools: ActionTools, userId: string, attemptId: string, token: string) {
+  const fresh = await loadOwnAttempt(tools, userId, attemptId)
+  if (fresh?.data.pending?.token === token) await tools.update('attempts', attemptId, { pending: null } as Record<string, unknown>)
+}
+
+const ALREADY_SUBMITTED = fail('This part was already submitted (another submission got there first).')
 
 function points(part: number) {
   return PARTS[part - 1].points
@@ -110,17 +188,18 @@ function judgedResult(part: number, submitted: string, checkpoints: string[], ju
   }
 }
 
-async function saveResult(tools: ActionTools, attempt: Attempt, part: number, result: PartResult, extra: Partial<AttemptRow> = {}) {
-  const results = { ...(attempt.data.results ?? {}), [String(part)]: result }
-  const updated = await tools.update('attempts', attempt.recordId, {
+/** Save a part's result into the FRESH attempt, advance it, and drop the claim. */
+async function saveResult(tools: ActionTools, fresh: Attempt, part: number, result: PartResult, extra: Partial<AttemptRow> = {}) {
+  const results = { ...(fresh.data.results ?? {}), [String(part)]: result }
+  const updated = await tools.update('attempts', fresh.recordId, {
     results,
     totalScore: sumScore(results),
-    ...nextPartPatch(attempt.data, part + 1),
+    ...nextPartPatch(fresh.data, part + 1),
+    pending: null,
     ...extra,
   } as Record<string, unknown>)
   return updated.success ? results : null
 }
-
 
 /**
  * The caller's display name from their JWT. The action route has already
@@ -135,20 +214,29 @@ function jwtName(jwt: string): unknown {
   }
 }
 
+/**
+ * Leaderboard score per case = your FIRST completed attempt at it. A finished
+ * attempt shows the model answer, so a best-of rule would let anyone replay
+ * a case from the answer key and max the board.
+ */
+export function firstAttemptScores(rows: Array<Partial<AttemptRow>>): Record<string, number> {
+  const first: Record<string, { at: string; score: number }> = {}
+  for (const d of rows) {
+    if (d.status !== 'completed' || !d.caseId || !CASES.some((c) => c.id === d.caseId)) continue
+    const at = d.completedAt || d.startedAt || ''
+    if (!first[d.caseId] || at < first[d.caseId].at) first[d.caseId] = { at, score: Number(d.totalScore) || 0 }
+  }
+  return Object.fromEntries(Object.entries(first).map(([k, v]) => [k, v.score]))
+}
+
 /** Recompute the caller's public summary from their completed attempts. */
 async function refreshLeaderboard(tools: ActionTools, userId: string, callerJwt: string) {
   const mine = await tools.query('attempts', { where: { userId, status: 'completed' }, limit: 500 })
   if (!mine.success) return
-  const best: Record<string, number> = {}
-  for (const r of mine.data.records) {
-    const d = r.data as Partial<AttemptRow>
-    if (!d.caseId || !CASES.some((c) => c.id === d.caseId)) continue
-    best[d.caseId] = Math.max(best[d.caseId] ?? 0, Number(d.totalScore) || 0)
-  }
-  const name = publicName(jwtName(callerJwt))
+  const best = firstAttemptScores(mine.data.records.map((r) => r.data as Partial<AttemptRow>))
   const row: LeaderboardRow = {
     userId,
-    name,
+    name: publicName(jwtName(callerJwt)),
     best,
     solved: Object.keys(best).length,
     total: Object.values(best).reduce((s, n) => s + n, 0),
@@ -205,10 +293,16 @@ export const actions: Record<string, ActionHandler<Env>> = {
       factIdx: [],
       qa: [],
       review: null,
+      pending: null,
+      aiCalls: 0,
       startedAt: new Date().toISOString(),
       completedAt: '',
     }
-    const created = await tools.create('attempts', row as unknown as Record<string, unknown>)
+    // Deterministic id per (user, case, day, slot): a burst of parallel starts
+    // all compute the same slot and land on ONE record instead of slipping
+    // past the daily limit with many.
+    const recordId = `att-${userId}-${caseId}-${today}-${startedToday}`
+    const created = await tools.create('attempts', row as unknown as Record<string, unknown>, recordId)
     if (!created.success) return fail('Could not start the case')
     return { success: true, data: { attemptId: created.data.recordId, resumed: false } }
   },
@@ -221,26 +315,34 @@ export const actions: Record<string, ActionHandler<Env>> = {
    */
   askQuestion: async ({ userId, params, tools, env }) => {
     const loaded = await loadForPart(tools, userId, params.attemptId, 1)
-    if (loaded.error) return loaded.error
+    if ('error' in loaded) return loaded.error
     const { attempt, a, summary, hidden } = loaded
-    const qa = a.qa ?? []
-    if (qa.length >= MAX_QUESTIONS) return fail(`You've used all ${MAX_QUESTIONS} questions. Move on to Structure.`)
+    if ((a.qa ?? []).length >= MAX_QUESTIONS) return fail(`You've used all ${MAX_QUESTIONS} questions. Move on to Structure.`)
     const question = text(params.question, MAX_QUESTION + 1)
     if (!question) return fail('Type a question first.')
     if (question.length > MAX_QUESTION) return fail(`Keep questions under ${MAX_QUESTION} characters.`)
 
+    const claimed = await claim(tools, loaded, 1, 1)
+    if ('error' in claimed) return claimed.error
+
     let reply
     try {
-      reply = await askInterviewer(env, summary, hidden, qa, question)
+      reply = await askInterviewer(env, summary, hidden, a.qa ?? [], question)
     } catch (err) {
-      return aiFailure(err, 'askQuestion') // a failed call doesn't use up the question
+      await release(tools, userId, attempt.recordId, claimed.token)
+      return aiFailure(err, 'askQuestion') // the question isn't used up (the AI call is counted)
     }
 
-    const factIdx = [...new Set([...(a.factIdx ?? []), ...reply.revealedFacts])].sort((x, y) => x - y)
+    const fresh = await confirm(tools, userId, attempt.recordId, 1, claimed.token)
+    if (!fresh) return ALREADY_SUBMITTED
+    const qa = fresh.data.qa ?? []
+    if (qa.length >= MAX_QUESTIONS) return fail(`You've used all ${MAX_QUESTIONS} questions. Move on to Structure.`)
+    const factIdx = [...new Set([...(fresh.data.factIdx ?? []), ...reply.revealedFacts])].sort((x, y) => x - y)
     const updated = await tools.update('attempts', attempt.recordId, {
       qa: [...qa, { q: question, a: reply.answer }],
       factIdx,
       facts: factIdx.map((i) => hidden.facts[i].label),
+      pending: null,
     } as Record<string, unknown>)
     if (!updated.success) return fail('Could not save')
     return { success: true, data: { answer: reply.answer, questionsLeft: MAX_QUESTIONS - qa.length - 1 } }
@@ -253,8 +355,13 @@ export const actions: Record<string, ActionHandler<Env>> = {
    */
   finishClarify: async ({ userId, params, tools }) => {
     const loaded = await loadForPart(tools, userId, params.attemptId, 1)
-    if (loaded.error) return loaded.error
-    const { attempt, a, hidden } = loaded
+    if ('error' in loaded) return loaded.error
+    const claimed = await claim(tools, loaded, 1, 0)
+    if ('error' in claimed) return claimed.error
+    const fresh = await confirm(tools, userId, loaded.attempt.recordId, 1, claimed.token)
+    if (!fresh) return ALREADY_SUBMITTED
+    const a = fresh.data
+    const { hidden } = loaded
 
     const keyIdx = hidden.facts.flatMap((f, i) => (f.key ? [i] : []))
     const revealed = a.factIdx ?? []
@@ -275,7 +382,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
             ? `You had ${MAX_QUESTIONS - asked} question${MAX_QUESTIONS - asked === 1 ? '' : 's'} left. Use them: the facts you skip are often the ones the case turns on.`
             : '',
     }
-    if (!(await saveResult(tools, attempt, 1, result))) return fail('Could not save')
+    if (!(await saveResult(tools, fresh, 1, result))) return fail('Could not save')
     return { success: true, data: { result } }
   },
 
@@ -285,11 +392,13 @@ export const actions: Record<string, ActionHandler<Env>> = {
    */
   submitStructure: async ({ userId, params, tools, env }) => {
     const loaded = await loadForPart(tools, userId, params.attemptId, 2)
-    if (loaded.error) return loaded.error
+    if ('error' in loaded) return loaded.error
     const { attempt, summary, hidden } = loaded
     const submitted = text(params.text)
     if (submitted.length < 20) return fail('Write out your framework first (a few lines at least).')
 
+    const claimed = await claim(tools, loaded, 2, 1)
+    if ('error' in claimed) return claimed.error
     let judged
     try {
       judged = await judgeAgainstCheckpoints(
@@ -300,10 +409,13 @@ export const actions: Record<string, ActionHandler<Env>> = {
         submitted,
       )
     } catch (err) {
+      await release(tools, userId, attempt.recordId, claimed.token)
       return aiFailure(err, 'submitStructure')
     }
+    const fresh = await confirm(tools, userId, attempt.recordId, 2, claimed.token)
+    if (!fresh) return ALREADY_SUBMITTED
     const result = judgedResult(2, submitted, hidden.structureCheckpoints, judged)
-    if (!(await saveResult(tools, attempt, 2, result))) return fail('Could not save')
+    if (!(await saveResult(tools, fresh, 2, result))) return fail('Could not save')
     return { success: true, data: { result } }
   },
 
@@ -315,18 +427,20 @@ export const actions: Record<string, ActionHandler<Env>> = {
    */
   submitAnalyze: async ({ userId, params, tools, env }) => {
     const loaded = await loadForPart(tools, userId, params.attemptId, 3)
-    if (loaded.error) return loaded.error
+    if ('error' in loaded) return loaded.error
     const { attempt, summary, hidden } = loaded
 
-    const raw = typeof params.answer === 'string' ? params.answer.trim() : String(params.answer ?? '').trim()
+    const raw = typeof params.answer === 'string' ? params.answer.trim().slice(0, 40) : ''
     const soWhat = text(params.soWhat, 1_000)
-    const value = parseNumber(raw)
+    const value = parseAnswer(raw, summary.analyzeUnit)
     if (value === null) return fail('Enter a single number, like 12.5')
+
+    // The "so what" is only worth an AI call if they wrote one.
+    const claimed = await claim(tools, loaded, 3, soWhat ? 1 : 0)
+    if ('error' in claimed) return claimed.error
 
     const numberVerdict = judgeNumber(value, hidden.answer.value, hidden.answer.tolerancePct, ANALYZE_NUMBER_POINTS)
     const expected = formatAnswer(hidden.answer.value, summary.analyzeUnit)
-
-    // The "so what" is only worth an AI call if they wrote one.
     let soWhatHit = false
     let soWhatNote = ''
     if (soWhat) {
@@ -341,9 +455,12 @@ export const actions: Record<string, ActionHandler<Env>> = {
         soWhatHit = judged.hits[0]
         soWhatNote = judged.feedback
       } catch (err) {
+        await release(tools, userId, attempt.recordId, claimed.token)
         return aiFailure(err, 'submitAnalyze')
       }
     }
+    const fresh = await confirm(tools, userId, attempt.recordId, 3, claimed.token)
+    if (!fresh) return ALREADY_SUBMITTED
 
     const soWhatMax = points(3) - ANALYZE_NUMBER_POINTS
     const hits: string[] = []
@@ -367,7 +484,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
         .filter(Boolean)
         .join(' '),
     }
-    if (!(await saveResult(tools, attempt, 3, result))) return fail('Could not save')
+    if (!(await saveResult(tools, fresh, 3, result))) return fail('Could not save')
     return { success: true, data: { result } }
   },
 
@@ -379,11 +496,13 @@ export const actions: Record<string, ActionHandler<Env>> = {
    */
   submitRecommend: async ({ userId, params, tools, env, callerJwt }) => {
     const loaded = await loadForPart(tools, userId, params.attemptId, 4)
-    if (loaded.error) return loaded.error
-    const { attempt, a, summary, hidden } = loaded
+    if ('error' in loaded) return loaded.error
+    const { attempt, summary, hidden } = loaded
     const submitted = text(params.text)
     if (submitted.length < 40) return fail('Write out your recommendation first: answer, reasons, risks, next steps.')
 
+    const claimed = await claim(tools, loaded, 4, 1)
+    if ('error' in claimed) return claimed.error
     const checkpoints = [hidden.recommendationCall, ...RECOMMENDATION_CHECKPOINTS]
     let judged
     try {
@@ -395,14 +514,17 @@ export const actions: Record<string, ActionHandler<Env>> = {
         submitted,
       )
     } catch (err) {
+      await release(tools, userId, attempt.recordId, claimed.token)
       return aiFailure(err, 'submitRecommend')
     }
+    const fresh = await confirm(tools, userId, attempt.recordId, 4, claimed.token)
+    if (!fresh) return ALREADY_SUBMITTED
     const result = judgedResult(4, submitted, checkpoints, judged)
-    const results = await saveResult(tools, attempt, 4, result, {
+    const results = await saveResult(tools, fresh, 4, result, {
       status: 'completed',
       completedAt: new Date().toISOString(),
       currentPart: PARTS.length + 1,
-      review: buildReview(a, hidden),
+      review: buildReview(fresh.data, hidden),
     })
     if (!results) return fail('Could not save')
     await refreshLeaderboard(tools, userId, callerJwt)

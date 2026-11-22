@@ -4,7 +4,7 @@
  *
  * A second, deliberately different permission level from `attempts`:
  * attempts are private (read: 'own'), but this summary (a display name and
- * best scores, nothing else) is readable by everyone, signed out included.
+ * first-attempt scores, nothing else) is readable by everyone, signed out included.
  * Nobody can write it from the browser, so nobody can edit their own rank.
  */
 
@@ -14,11 +14,11 @@ export interface LeaderboardRow {
   userId: string
   /** First name + last initial, e.g. "Mohammed A." */
   name: string
-  /** Sum of the user's best score on each case (max 100 per case). */
+  /** Sum of the user's first-attempt score on each case (max 100 per case). */
   total: number
   /** Number of distinct cases completed. */
   solved: number
-  /** Best score per caseId. */
+  /** First-attempt score per caseId (field kept as `best` for compatibility). */
   best: Record<string, number>
 }
 

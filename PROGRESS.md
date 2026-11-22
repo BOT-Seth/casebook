@@ -127,3 +127,29 @@ One entry per slice: what was built, how it was verified, what is still open.
 | AI spend so far, all testing | **12 calls, $0.0038** (`npx deepspace app usage`) |
 
 **Bugs found and fixed:** leaderboard name was "Anonymous" (the SDK's `decodeJwtPayload` doesn't return `name`; the action now reads it from the verified token directly). A stray eslint directive in the new spec put up Vite's error overlay, which made 3 template specs fail; removed it, 15/15.
+
+## Hardening after code review (Nov 22, 2026)
+
+A reviewer agent audited the actions for cheating and cost holes. It found 8 issues and confirmed 7. All were fixed
+(decisions #24–28):
+
+| # | Finding | Fix | Checked by |
+| --- | --- | --- | --- |
+| 1 | Parallel/slow requests could reopen Part 3 after seeing the answer | Claim token + fresh re-read before every save | Playwright race spec |
+| 2 | Parallel questions could exceed the 3-question cap | Same claim; question count re-checked on the fresh copy | Same mechanism |
+| 3 | Parallel starts could exceed the daily limit | Deterministic record id per user/case/day/slot, so a burst lands on one record | Race spec: 5 starts → 1 attempt |
+| 4 | Failed AI calls retryable for free | 10 AI calls per attempt, failures counted | Code review |
+| 5 | "$18,000,000" / "$0.048M" graded wrong | `parseAnswer` with units | Unit tests; live run graded "$18,000,000" as $18M |
+| 6 | Leaderboard farmable by replaying with the answer | First completed attempt per case | Unit test |
+| 7 | Finished attempts could end up inconsistent | Same as #1 | Race spec: results count = parts done |
+| 8 | One broad question could reveal every fact | Max 2 facts per answer | Code + instructions |
+
+After the rewrite, one full AI-graded case ran through the actions locally. It got 3/3 key facts, the number right,
+and 5/5 on the recommendation. The Structure part was accidentally sent the *VoltPath* framework and correctly
+scored 0/4, with feedback saying it answered a different case.
+
+| Check | Result |
+| --- | --- |
+| `npx deepspace test run all` | ✅ **16/16** (new: parallel-burst spec) |
+| Unit tests | ✅ 16/16 |
+| `tsc`, `eslint`, `npm run check:bundle` | ✅ |

@@ -26,7 +26,7 @@ export default function LeaderboardPage() {
       <title>Leaderboard · Casebook</title>
       <h1 className="text-2xl font-semibold tracking-tight">Leaderboard</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Your best score on each case, added up. Max <span className="font-mono">{CASES.length * MAX_SCORE}</span>.
+        Your first-attempt score on each case, added up. Retries count on Progress, not here. Max <span className="font-mono">{CASES.length * MAX_SCORE}</span>.
         Updates live.
       </p>
 

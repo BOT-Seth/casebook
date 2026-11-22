@@ -206,3 +206,46 @@ finance and PM case interviews, built on DeepSpace.
   permanently treats that repo as the source (see decision #9).
 - **Tradeoff:** DeepSpace's own workspace and branch features are off for this app. Deploys ship the local checkout,
   so commit first.
+
+## 24. A claim token on each attempt, instead of trusting one read
+- **Found (code review):** each action read the attempt, waited seconds for the AI, then wrote back the copy it had
+  read. Two parallel requests could both pass the "right part" check. A slow Part 3 could even land *after* Part 4
+  and reopen Part 3, so you could resubmit it with the answer showing.
+- **Chose:** every action that grades first writes a `pending` marker with a random token and reads it back. It
+  backs off if another request's token is there. After the AI call it re-reads the attempt and saves only if the
+  attempt is still on the same part and still carries its token. It merges into that fresh copy, never the old one.
+- **Verified:** 5 parallel "finish Part 1" calls → 1 scored, 4 refused ("Still grading…"), the attempt on Part 2,
+  no leftover marker. This is a Playwright spec now.
+- **Tradeoff:** it's not a true lock. Two requests whose writes interleave in the few milliseconds between write and
+  read-back could both call the AI, though only one can save. A real lock means running the read-check-write
+  inside one Durable Object call, which the SDK's action tools don't expose. A crashed request leaves the marker
+  for up to 90 seconds, so that attempt shows "Still grading" until it expires.
+
+## 25. An AI budget per attempt (10 calls), failures included
+- **Found:** a failed AI call didn't use up your question or submission, so you could retry it for free, forever,
+  on the owner's credits.
+- **Chose:** each attempt counts its AI calls and stops at 10. A clean run uses 6. The other 4 are for retries
+  after a real error.
+- **Tradeoff:** someone very unlucky with errors has to start a new attempt. With the 8-per-day limit, one user
+  costs the owner at most 80 Haiku calls a day (a couple of cents).
+
+## 26. Leaderboard ranks your first attempt at each case, not your best
+- **Found:** a finished case shows the model answer. With "best score" ranking, anyone could replay a case from
+  the answer and get 100.
+- **Chose:** the leaderboard uses your first completed attempt per case. Retries still count on your Progress page.
+- **Tradeoff:** one bad first run stays on the board. That's also how a real interview works.
+
+## 27. Each interviewer answer reveals at most 2 facts
+- **Found:** "Tell me everything about the business" could reveal the whole fact sheet and max Part 1.
+- **Chose:** code keeps at most 2 revealed facts per answer. The interviewer is told to ask for something more
+  specific when a question is too broad.
+- **Tradeoff:** a genuinely good two-part question can be cut short. With 3 key facts and 3 questions, the score is
+  still reachable.
+
+## 28. Numbers are read in the question's unit
+- **Found:** "$18,000,000" on a "$M" question was read as 18,000,000 million and marked wrong. "$0.048M" on a
+  dollar question failed to parse at all.
+- **Chose:** `parseAnswer(input, unit)` understands k/m/b and "million". It reads a bare number on a $M question as
+  millions when it's small ("18") and as dollars when it's a full figure ("18000000").
+- **Tradeoff:** a bare answer between 100,000 and 1 million on a $M question would be read as dollars. No case's
+  answer is anywhere near that range.

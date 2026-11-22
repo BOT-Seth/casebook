@@ -6,6 +6,7 @@
  *   - parts can only be played in order, through server actions
  *   - another user can't read or act on your attempt
  *   - nobody can write the public leaderboard from the browser
+ *   - parallel requests can't start extra attempts or submit a part twice
  *
  * None of these call the AI (no Part 2-4 submissions), so the suite costs
  * nothing to run. Needs two usable test accounts (see collab.spec.ts).
@@ -133,5 +134,47 @@ test.describe('two users', () => {
       `(action, tool) => tool('records_create', { collection: 'leaderboard', data: { userId: 'me', name: 'Me', total: 9999, solved: 3 } })`,
     )
     expect(rank.body.error).toContain('CREATE DENIED')
+  })
+
+  test('parallel requests collapse to one attempt and one submission', async ({ users }) => {
+    const [a] = await users(1)
+    await a.page.goto('/cases')
+    await expect(a.page.getByTestId('app-navigation')).toBeVisible({ timeout: 15_000 })
+
+    // A burst of starts lands on one attempt, not five.
+    const starts = await asUser<Array<{ success: boolean; data?: { attemptId: string } }>>(
+      a.page,
+      `(action) => Promise.all([1, 2, 3, 4, 5].map(() => action('startAttempt', { caseId: 'clarion' })))`,
+    )
+    const ids = new Set(starts.filter((r) => r.success).map((r) => r.data!.attemptId))
+    expect(ids.size).toBe(1)
+    const [attemptId] = [...ids]
+
+    const read = (id: string) =>
+      asUser<{ body: { result: { data: { record: { data: { currentPart: number; pending: unknown; results: object } } } } } }>(
+        a.page,
+        `(action, tool, id) => tool('records_get', { collection: 'attempts', recordId: id })`,
+        id,
+      ).then((r) => r.body.result.data.record.data)
+
+    const before = await read(attemptId)
+    // Five parallel "finish Part 1" calls (no AI): at most one may score it.
+    const burst = await asUser<Array<{ success: boolean }>>(
+      a.page,
+      `(action, tool, id) => Promise.all([1, 2, 3, 4, 5].map(() => action('finishClarify', { attemptId: id })))`,
+      attemptId,
+    )
+    const wins = burst.filter((r) => r.success).length
+    const after = await read(attemptId)
+    if (before.currentPart === 1) {
+      expect(wins).toBe(1)
+      expect(after.currentPart).toBe(2)
+    } else {
+      // A rerun resumes the attempt from last time, already past Part 1.
+      expect(wins).toBe(0)
+      expect(after.currentPart).toBe(before.currentPart)
+    }
+    expect(after.pending ?? null).toBeNull()
+    expect(Object.keys(after.results)).toHaveLength(after.currentPart - 1)
   })
 })

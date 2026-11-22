@@ -2,15 +2,28 @@
  * Deterministic grading: no AI. (Decision #4: math is graded by code.)
  */
 
-/** Pull a number out of what the candidate typed: "18", "$18.0M", "18,000", "233 vans". */
-export function parseNumber(input: string): number | null {
+const SCALE: Record<string, number> = { k: 1e3, thousand: 1e3, m: 1e6, mm: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 }
+
+/**
+ * Pull a number out of what the candidate typed, in the question's unit.
+ *   unit '$M':  "18", "$18M", "18 million", "$18,000,000", "0.018b"  → 18
+ *   unit '$':   "48000", "$48,000", "48k", "$0.048M"                 → 48000
+ *   unit other: "233", "233 vans"                                    → 233
+ * A bare number on a $M question is read as millions when it's small
+ * ("18") and as dollars when it's clearly a full figure ("18000000").
+ */
+export function parseAnswer(input: string, unit: string): number | null {
   const s = input.trim().toLowerCase().replace(/[$,\s]/g, '')
-  const match = s.match(/^(-?\d+(?:\.\d+)?)(k|m|million|vans?)?$/)
+  const match = s.match(/^(-?\d+(?:\.\d+)?)(k|thousand|mm|m|million|bn|b|billion|vans?)?$/)
   if (!match) return null
   const n = Number(match[1])
   if (!Number.isFinite(n)) return null
-  // "48k" means thousands. "m" is ignored: the $M questions already ask in millions.
-  return match[2] === 'k' ? n * 1000 : n
+  const suffix = match[2] && SCALE[match[2]] ? SCALE[match[2]] : null
+  if (unit === '$M') {
+    if (suffix !== null) return (n * suffix) / 1e6
+    return Math.abs(n) >= 100_000 ? n / 1e6 : n
+  }
+  return suffix !== null ? n * suffix : n
 }
 
 export interface NumberVerdict {
