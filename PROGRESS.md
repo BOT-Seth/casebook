@@ -81,3 +81,48 @@ One entry per slice: what was built, how it was verified, what is still open.
 **Screenshots:** `docs/screenshots/slice2-*.png`
 
 **Open:** Part 3's "so what" and all of Part 4 are graded in slice 3.
+
+---
+
+## Slices 3–6 (overnight, Nov 22, 2026)
+
+### Slice 3: Part 3 "so what", Part 4, scorecard, model answer
+- Part 3 = number graded by code (20) + one-line "so what" graded by the judge (10). Leave the "so what" empty and you get no AI call and 0 for that line.
+- Part 4 judged against the case's **right call** plus 4 standard checkpoints (answer first, numbers, risks, next steps).
+- On completion the server writes a `review` onto the attempt: insight, worked math, model recommendation, and which key facts you found or missed. The model answer *can't* be read early, because it isn't in your record until you finish.
+- Case page reworked:
+  - An intro screen with a **Start** button. Nothing auto-starts, so there are no accidental attempts and no wasted credits.
+  - The attempt is pinned in `?attempt=`, so a finished case stays on screen.
+  - Past attempts are listed; Model answer tab; scorecard with a score band; Try again.
+
+### Slice 4: Progress + Leaderboard
+- `/progress`: solved count, attempts, average and best score, average share of points per part with "focus next" on the weakest part, best per case, linkable history.
+- `/leaderboard`: public and live. A separate `leaderboard` collection that everyone can read and only the server writes. The name shown is first name + last initial, from the verified JWT.
+
+### Slice 5: Discuss
+- `npx deepspace add messaging`. Its MessageList (threads, reactions, edit/delete) is reused in a per-case Discuss tab.
+- One channel per case; messages live in their own `chat:<channelId>` room.
+- The tab unlocks once you've finished that case. That's a spoiler guard, not a security boundary (decision #13).
+
+### Slice 6: Landing, README, tests, deploy
+- Landing page: a product-led hero (code-rendered slice of a real case), the grading rubric table, and the 3 cases. Passes the DeepSpace anti-AI grep gate.
+- README rewritten: how grading works, the DeepSpace primitives used and skipped, security model, cost.
+- `tests/casebook.spec.ts`: two real signed-in test users, no AI calls.
+- **Deployed: https://casebook.app.space** (GitHub source: `BOT-Seth/casebook`).
+
+### Verification (everything below was run, not assumed)
+
+| Check | Result |
+| --- | --- |
+| Full case, strong answers (local, VoltPath) | 85/100 "Offer-ready"; Part 3 so-what credited; Part 4 5/5 |
+| Full case, deliberately weak answers (**production**, Harvest Lane) | 6/100: 0/3 key facts (asked only about the Aldi red herring), structure 0/4, wrong number, price-cut recommendation 1/5. Coaching names exactly what was missed. |
+| Model answer and key facts appear only after completion | ✅ |
+| Leaderboard row written on completion; direct write from browser | ✅ `UPDATE DENIED` / `CREATE DENIED` |
+| Leaderboard name from JWT | ✅ "Casebook B." in production (test row then deleted with owner agent tools) |
+| Discuss: post a message, live, with reactions/threads | ✅ |
+| `npx deepspace test run all` | ✅ **15/15** (incl. new two-user privacy + anti-cheat spec) |
+| Unit tests | ✅ 12/12 |
+| `npm run check:bundle` | ✅ no hidden case data in the client bundle |
+| AI spend so far, all testing | **12 calls, $0.0038** (`npx deepspace app usage`) |
+
+**Bugs found and fixed:** leaderboard name was "Anonymous" (the SDK's `decodeJwtPayload` doesn't return `name`; the action now reads it from the verified token directly). A stray eslint directive in the new spec put up Vite's error overlay, which made 3 template specs fail; removed it, 15/15.

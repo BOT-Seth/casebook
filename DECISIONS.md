@@ -178,6 +178,27 @@ finance and PM case interviews, built on DeepSpace.
 - **Chose:** a 3,000-token limit and one automatic retry.
 - **Tradeoff:** none on cost (you pay for tokens used, not the limit). A rare retry adds a few seconds.
 
+## 21. Nothing auto-starts; a case begins when you press Start
+- **Before:** opening a case page immediately created an attempt.
+- **Chose:** an intro screen with a Start button. The attempt in progress is pinned in the URL.
+- **Why:** auto-start created attempts just by browsing, which used up the daily cap and made the finished
+  scorecard disappear on reload.
+- **Tradeoff:** one extra click.
+
+## 22. Writing the model answer at completion, instead of fetching it
+- **Chose:** when Part 4 is submitted, the server copies the model answer and the key facts (found or missed) onto
+  your attempt.
+- **Why:** the page renders it like everything else, from the live record, and it physically isn't in the record
+  before you finish. There's no separate "may I see the answer?" endpoint to secure.
+- **Tradeoff:** if a model answer is edited later, old attempts keep the version they were graded against. That's
+  arguably correct.
+
+## 23. Deployed with GitHub as the app's source
+- **Done:** the first `npx deepspace deploy` ran with `origin` set to `github.com/BOT-Seth/casebook`, so DeepSpace
+  permanently treats that repo as the source (see decision #9).
+- **Tradeoff:** DeepSpace's own workspace and branch features are off for this app. Deploys ship the local checkout,
+  so commit first.
+
 ## 14. Leaderboard
 - **Chose:** a leaderboard of total best scores across cases.
 - **How:** a separate `leaderboard` table that **only the server writes**, holding just display name and score.
