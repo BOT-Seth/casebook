@@ -133,6 +133,14 @@ finance and PM case interviews, built on DeepSpace.
   (to avoid spoilers) is therefore a UI choice, not a server-enforced rule. Spoilers aren't a security issue, so
   that's acceptable.
 
+## 14. Leaderboard
+- **Chose:** a leaderboard of total best scores across cases.
+- **How:** a separate `leaderboard` table that **only the server writes**, holding just display name and score.
+  Everyone can read it.
+- **Why a separate table:** individual attempts stay private (read-own). Only the summary is public. That's two
+  different permission levels on purpose.
+- **Tradeoff:** one more table to keep in sync. The server updates it whenever an attempt finishes.
+
 ## 15. Cases modeled on real interview cases, but written by us
 - **Considered:** copying real cases from McKinsey/Bain/BCG practice pages and MBA casebooks (Wharton, Darden, Kellogg).
 - **Chose:** each case follows the *format* of a real published case (question flow, exhibit type, math type), with
@@ -198,11 +206,3 @@ finance and PM case interviews, built on DeepSpace.
   permanently treats that repo as the source (see decision #9).
 - **Tradeoff:** DeepSpace's own workspace and branch features are off for this app. Deploys ship the local checkout,
   so commit first.
-
-## 14. Leaderboard
-- **Chose:** a leaderboard of total best scores across cases.
-- **How:** a separate `leaderboard` table that **only the server writes**, holding just display name and score.
-  Everyone can read it.
-- **Why a separate table:** individual attempts stay private (read-own). Only the summary is public. That's two
-  different permission levels on purpose.
-- **Tradeoff:** one more table to keep in sync. The server updates it whenever an attempt finishes.
