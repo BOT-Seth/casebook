@@ -7,8 +7,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthOverlay, useAuth } from 'deepspace'
-import { CheckCircle2, CircleDashed, Clock } from 'lucide-react'
-import { CASES, COMING_SOON } from '../../../cases/catalog'
+import { CheckCircle2, CircleDashed, CircleDot, Clock } from 'lucide-react'
+import { CASES, COMING_SOON, SOLVED_SCORE } from '../../../cases/catalog'
 import { DIFFICULTY_STYLE, useMyAttempts } from '../../../lib/attempts'
 
 export default function CaseListPage() {
@@ -59,6 +59,10 @@ export default function CaseListPage() {
                   <td className="px-4 py-3">
                     {mine?.solved ? (
                       <CheckCircle2 className="size-4 text-success" aria-label="Solved" />
+                    ) : mine?.attempted ? (
+                      <span title={`Attempted: solved at ${SOLVED_SCORE}+`}>
+                        <CircleDot className="size-4 text-muted-foreground" aria-label="Attempted, not solved" />
+                      </span>
                     ) : mine?.inProgress ? (
                       <CircleDashed className="size-4 text-warning" aria-label="In progress" />
                     ) : null}
@@ -90,7 +94,7 @@ export default function CaseListPage() {
                       <Clock className="size-3.5" /> {c.estMinutes}m
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">{mine?.solved ? `${mine.best}` : '—'}</td>
+                  <td className="px-4 py-3 text-right font-mono">{mine?.attempted ? `${mine.best}` : '—'}</td>
                 </tr>
               )
             })}

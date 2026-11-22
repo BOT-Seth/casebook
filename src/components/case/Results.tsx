@@ -8,7 +8,7 @@
 import { Check, RotateCcw, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui'
-import { MAX_SCORE, PARTS } from '../../cases/catalog'
+import { MAX_SCORE, PARTS, SOLVED_SCORE } from '../../cases/catalog'
 import type { AttemptRow } from '../../schemas/attempts-schema'
 import { cn } from '../../lib/utils'
 import { ResultRow } from './Workspace'
@@ -16,7 +16,7 @@ import { ResultRow } from './Workspace'
 /** Score bands, roughly how an MBB interviewer would read the performance. */
 export function band(score: number): { label: string; tone: string } {
   if (score >= 85) return { label: 'Offer-ready', tone: 'text-success' }
-  if (score >= 70) return { label: 'Strong', tone: 'text-success' }
+  if (score >= SOLVED_SCORE) return { label: 'Strong', tone: 'text-success' }
   if (score >= 50) return { label: 'Developing', tone: 'text-warning' }
   return { label: 'Keep practicing', tone: 'text-destructive' }
 }

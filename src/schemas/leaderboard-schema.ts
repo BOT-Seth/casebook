@@ -16,7 +16,7 @@ export interface LeaderboardRow {
   name: string
   /** Sum of the user's first-attempt score on each case (max 100 per case). */
   total: number
-  /** Number of distinct cases completed. */
+  /** Cases whose first attempt scored SOLVED_SCORE (70) or more. */
   solved: number
   /** First-attempt score per caseId (field kept as `best` for compatibility). */
   best: Record<string, number>

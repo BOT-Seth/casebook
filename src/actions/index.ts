@@ -32,7 +32,7 @@
 
 import type { ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
-import { CASES, getCase, PARTS, type CaseSummary } from '../cases/catalog'
+import { CASES, getCase, PARTS, SOLVED_SCORE, type CaseSummary } from '../cases/catalog'
 import { getHiddenCase, RECOMMENDATION_CHECKPOINTS, type HiddenCase } from '../server/cases'
 import { formatAnswer, judgeNumber, parseAnswer, scoreCheckpoints, scoreClarify } from '../server/grading'
 import { AiError, askInterviewer, judgeAgainstCheckpoints, type JudgeResult } from '../server/ai'
@@ -238,7 +238,8 @@ async function refreshLeaderboard(tools: ActionTools, userId: string, callerJwt:
     userId,
     name: publicName(jwtName(callerJwt)),
     best,
-    solved: Object.keys(best).length,
+    // Solved = first attempt scored in the "Strong" band or better.
+    solved: Object.values(best).filter((s) => s >= SOLVED_SCORE).length,
     total: Object.values(best).reduce((s, n) => s + n, 0),
   }
   // recordId = userId: one row per user, upserted.

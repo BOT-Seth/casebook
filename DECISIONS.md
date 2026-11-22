@@ -249,3 +249,12 @@ finance and PM case interviews, built on DeepSpace.
   millions when it's small ("18") and as dollars when it's a full figure ("18000000").
 - **Tradeoff:** a bare answer between 100,000 and 1 million on a $M question would be read as dollars. No case's
   answer is anywhere near that range.
+
+## 29. "Solved" means scoring 70+, not just finishing
+- **Found (playing it myself):** I finished two cases with 6/100 and 0/100, and Progress said "2/3 cases solved".
+  Finishing isn't solving.
+- **Chose:** a case counts as solved at 70+ (the "Strong" band), like an accepted submission on LeetCode. Finished
+  below 70 shows as "attempted" (a grey dot in the case list), with your best score next to it. The leaderboard's
+  Solved column uses your first attempt with the same 70 bar.
+- **Tradeoff:** 70 is a judgment call. It's one constant (`SOLVED_SCORE` in `src/cases/catalog.ts`), so it's easy to
+  change.

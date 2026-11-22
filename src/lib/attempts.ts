@@ -6,6 +6,7 @@
 import { useMemo } from 'react'
 import { getAuthToken, useAuth, useQuery } from 'deepspace'
 import type { AttemptRow } from '../schemas/attempts-schema'
+import { SOLVED_SCORE } from '../cases/catalog'
 
 export type AttemptRecord = {
   recordId: string
@@ -20,12 +21,13 @@ export function useMyAttempts() {
   const { records, status } = useQuery<AttemptRow>('attempts', { orderBy: 'createdAt', orderDir: 'desc' })
   return useMemo(() => {
     const attempts = (isSignedIn ? records : []) as AttemptRecord[]
-    const byCase = new Map<string, { best: number; solved: boolean; inProgress: AttemptRecord | null }>()
+    const byCase = new Map<string, { best: number; attempted: boolean; solved: boolean; inProgress: AttemptRecord | null }>()
     for (const a of attempts) {
-      const entry = byCase.get(a.data.caseId) ?? { best: 0, solved: false, inProgress: null }
+      const entry = byCase.get(a.data.caseId) ?? { best: 0, attempted: false, solved: false, inProgress: null }
       if (a.data.status === 'completed') {
-        entry.solved = true
+        entry.attempted = true
         entry.best = Math.max(entry.best, a.data.totalScore ?? 0)
+        entry.solved = entry.best >= SOLVED_SCORE
       } else if (!entry.inProgress) {
         entry.inProgress = a
       }

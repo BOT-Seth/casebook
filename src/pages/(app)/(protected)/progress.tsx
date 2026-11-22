@@ -8,7 +8,7 @@ import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BarChart3 } from 'lucide-react'
 import { EmptyState } from '@/components/ui'
-import { CASES, MAX_SCORE, PARTS, getCase } from '../../../cases/catalog'
+import { CASES, MAX_SCORE, PARTS, SOLVED_SCORE, getCase } from '../../../cases/catalog'
 import { useMyAttempts } from '../../../lib/attempts'
 import { band, duration } from '../../../components/case/Results'
 import { cn } from '../../../lib/utils'
@@ -36,7 +36,8 @@ export default function ProgressPage() {
     for (const a of done) bestByCase.set(a.data.caseId, Math.max(bestByCase.get(a.data.caseId) ?? 0, a.data.totalScore ?? 0))
     const avg = done.length ? Math.round(done.reduce((s, a) => s + (a.data.totalScore ?? 0), 0) / done.length) : 0
     const best = done.reduce((m, a) => Math.max(m, a.data.totalScore ?? 0), 0)
-    return { skills, weakest, bestByCase, avg, best }
+    const solved = [...bestByCase.values()].filter((s) => s >= SOLVED_SCORE).length
+    return { skills, weakest, bestByCase, avg, best, solved }
   }, [done])
 
   if (status === 'loading') return <p className="p-10 text-sm text-muted-foreground">Loading…</p>
@@ -58,7 +59,7 @@ export default function ProgressPage() {
       ) : (
         <>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Cases solved" value={`${stats.bestByCase.size}/${CASES.length}`} />
+            <Stat label={`Cases solved (${SOLVED_SCORE}+)`} value={`${stats.solved}/${CASES.length}`} />
             <Stat label="Attempts" value={String(done.length)} />
             <Stat label="Average score" value={String(stats.avg)} />
             <Stat label="Best score" value={String(stats.best)} />

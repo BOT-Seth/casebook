@@ -99,3 +99,9 @@ export const PARTS = [
 ] as const
 
 export const MAX_SCORE = 100
+
+/**
+ * A case counts as "solved" at this score (the "Strong" band). Finishing a
+ * case below it counts as attempted, like a failed submission on LeetCode.
+ */
+export const SOLVED_SCORE = 70
