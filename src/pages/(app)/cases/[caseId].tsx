@@ -5,26 +5,24 @@
  * server updates the attempt, and this page re-renders from the live
  * `attempts` subscription: stepper, score, exhibit and results all follow the
  * record.
+ *
+ * Which attempt is shown lives in the URL (?attempt=<id>), so a finished
+ * attempt stays on screen after completion and past attempts are linkable.
+ * Nothing starts automatically: a case only begins (and only counts toward
+ * the daily limit) when you press Start.
  */
 
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { AuthOverlay, useAuth } from 'deepspace'
-import { ArrowLeft, Calculator, Lock } from 'lucide-react'
-import { Button, Textarea, useToast } from '@/components/ui'
-import { getCase, PARTS, type CaseSummary } from '../../../cases/catalog'
+import { ArrowLeft, Lock, MessageSquare } from 'lucide-react'
+import { Button, useToast } from '@/components/ui'
+import { getCase, MAX_SCORE, PARTS, type CaseSummary } from '../../../cases/catalog'
 import { callAction, useMyAttempts, type AttemptRecord } from '../../../lib/attempts'
-import {
-  CalculatorDrawer,
-  CaseHeader,
-  ExhibitCard,
-  KeyFacts,
-  PartHeading,
-  ResultRow,
-  ScoreChip,
-  Stepper,
-  Timer,
-} from '../../../components/case/Workspace'
+import { CaseHeader, ExhibitCard, KeyFacts, ResultRow, ScoreChip, Stepper, Timer } from '../../../components/case/Workspace'
+import { AnalyzePart, ClarifyPart, RecommendPart, StructurePart } from '../../../components/case/Parts'
+import { band, ModelAnswer, Scorecard } from '../../../components/case/Results'
+import { cn } from '../../../lib/utils'
 
 export default function CasePage() {
   const { caseId = '' } = useParams()
@@ -35,357 +33,249 @@ export default function CasePage() {
     return (
       <div className="p-10">
         <p className="text-muted-foreground">No case called “{caseId}”.</p>
-        <Link to="/cases" className="mt-3 inline-block text-sm underline">Back to cases</Link>
+        <Link to="/cases" className="mt-3 inline-block text-sm underline">
+          Back to cases
+        </Link>
       </div>
     )
   }
-  if (!isSignedIn) return <SignInToStart c={c} />
-  return <Workspace c={c} />
+  return isSignedIn ? <CaseView c={c} /> : <SignedOutIntro c={c} />
 }
 
-/**
- * One in-flight start per case, so React's dev double-mount (or a fast
- * re-render) can't race two `startAttempt` calls into two attempts.
- */
-const starting = new Map<string, Promise<string>>()
-function startOnce(caseId: string): Promise<string> {
-  let p = starting.get(caseId)
-  if (!p) {
-    p = callAction<{ attemptId: string }>('startAttempt', { caseId })
-      .then((d) => d.attemptId)
-      .finally(() => setTimeout(() => starting.delete(caseId), 2000))
-    starting.set(caseId, p)
-  }
-  return p
-}
-
-function Workspace({ c }: { c: CaseSummary }) {
+function CaseView({ c }: { c: CaseSummary }) {
   const { attempts, status } = useMyAttempts()
+  const [params, setParams] = useSearchParams()
   const { error } = useToast()
-  const [attemptId, setAttemptId] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
 
-  // Start (or resume) on the server; the record then arrives over the live subscription.
+  const mine = attempts.filter((a) => a.data.caseId === c.id)
+  const inProgress = mine.find((a) => a.data.status === 'in_progress')
+  const requested = params.get('attempt')
+  const selected = requested ? mine.find((a) => a.recordId === requested) : inProgress
+
+  // Pin the in-progress attempt into the URL, so it stays selected after it completes.
   useEffect(() => {
-    let cancelled = false
-    startOnce(c.id)
-      .then((id) => !cancelled && setAttemptId(id))
-      .catch((e: Error) => !cancelled && error('Could not start the case', e.message))
-    return () => {
-      cancelled = true
-    }
-  }, [c.id])
+    if (!requested && inProgress) setParams({ attempt: inProgress.recordId }, { replace: true })
+  }, [requested, inProgress, setParams])
 
-  const attempt = attempts.find((a) => a.recordId === attemptId)
-  if (!attempt) {
-    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{status === 'error' ? 'Could not load.' : 'Opening case…'}</div>
+  async function start() {
+    setStarting(true)
+    try {
+      const { attemptId } = await callAction<{ attemptId: string }>('startAttempt', { caseId: c.id })
+      setParams({ attempt: attemptId })
+    } catch (e) {
+      error('Could not start the case', e instanceof Error ? e.message : String(e))
+    } finally {
+      setStarting(false)
+    }
   }
+
+  if (status === 'loading' || (requested && !selected && status !== 'error')) {
+    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading case…</div>
+  }
+  if (!selected) return <CaseIntro c={c} past={mine} onStart={start} starting={starting} />
+  return <Workspace c={c} attempt={selected} onRetry={start} retrying={starting} />
+}
+
+function Workspace({
+  c,
+  attempt,
+  onRetry,
+  retrying,
+}: {
+  c: CaseSummary
+  attempt: AttemptRecord
+  onRetry: () => void
+  retrying: boolean
+}) {
   const a = attempt.data
+  const done = a.status === 'completed'
+  const [tab, setTab] = useState<'case' | 'model'>('case')
+  useEffect(() => setTab(done ? 'model' : 'case'), [done, attempt.recordId])
 
   return (
     <div className="grid min-h-full gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)]">
       {/* Left: the problem */}
-      <section className="space-y-4">
+      <section className="min-w-0 space-y-4">
         <Link to="/cases" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-3.5" /> All cases
         </Link>
         <CaseHeader c={c} />
-        <div className="flex gap-4 border-b border-border text-sm">
-          <span className="border-b-2 border-primary pb-2 font-medium">Case</span>
-          <span className="pb-2 text-muted-foreground/60" title="Arrives in slice 5">Discuss</span>
-          <span className="inline-flex items-center gap-1 pb-2 text-muted-foreground/60" title="Unlocks after you finish">
-            Model answer <Lock className="size-3" />
-          </span>
+        <div role="tablist" className="flex gap-5 border-b border-border text-sm">
+          <Tab active={tab === 'case'} onClick={() => setTab('case')}>
+            Case
+          </Tab>
+          <Tab active={tab === 'model'} onClick={() => setTab('model')} disabled={!done}>
+            Model answer {!done && <Lock className="size-3" />}
+          </Tab>
+          <Tab active={false} disabled title="Discussion opens after you finish the case">
+            <MessageSquare className="size-3.5" /> Discuss
+          </Tab>
         </div>
-        <p className="leading-relaxed">{c.prompt}</p>
-        <ExhibitCard exhibit={a.exhibit} />
-        <KeyFacts facts={a.facts ?? []} />
-      </section>
-
-      {/* Right: the four parts */}
-      <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <Stepper current={a.currentPart} />
-          </div>
-          <Timer startedAt={a.startedAt} stoppedAt={a.completedAt || undefined} />
-          <ScoreChip attempt={a} />
-        </div>
-
-        {PARTS.filter((p) => a.results?.[String(p.n)]).map((p) => (
-          <ResultRow key={p.n} part={p.n} result={a.results[String(p.n)]} />
-        ))}
-
-        <CurrentPart attempt={attempt} c={c} />
-      </section>
-    </div>
-  )
-}
-
-function CurrentPart({ attempt, c }: { attempt: AttemptRecord; c: CaseSummary }) {
-  const a = attempt.data
-  switch (a.currentPart) {
-    case 1:
-      return <ClarifyPart key="part-1" attempt={attempt} />
-    case 2:
-      return (
-        <TextPart
-          key="part-2"
-          attemptId={attempt.recordId}
-          action="submitStructure"
-          part={2}
-          title="Structure"
-          hint="Lay out your framework or issue tree. It's graded against the checkpoints a strong answer covers."
-          placeholder={'Profit = Revenue − Costs\n  Revenue: price × volume …\n  Costs: …'}
-          cta="Submit structure"
-          busyLabel="Grading…"
-          rows={9}
-        />
-      )
-    case 3:
-      return <AnalyzePart attemptId={attempt.recordId} c={c} />
-    case 4:
-      return (
-        <div className="space-y-2">
-          <PartHeading n={4} title="Recommend" />
-          <div className="flex items-center gap-3 rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-            <Lock className="size-4 shrink-0" /> Recommendation grading arrives in slice 3.
-          </div>
-        </div>
-      )
-    default:
-      return <p className="text-sm text-muted-foreground">Case complete.</p>
-  }
-}
-
-function TextPart(props: {
-  attemptId: string
-  action: string
-  part: number
-  title: string
-  hint: string
-  placeholder: string
-  cta: string
-  busyLabel?: string
-  rows?: number
-}) {
-  const { error } = useToast()
-  const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  async function submit() {
-    setBusy(true)
-    try {
-      await callAction(props.action, { attemptId: props.attemptId, text })
-    } catch (e) {
-      error('Could not submit', e instanceof Error ? e.message : String(e))
-      setBusy(false)
-    }
-  }
-  return (
-    <div className="space-y-3">
-      <PartHeading n={props.part} title={props.title} hint={props.hint} />
-      <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={props.rows ?? 4} placeholder={props.placeholder} />
-      <div className="flex justify-end">
-        <Button onClick={submit} loading={busy} disabled={!text.trim()}>
-          {busy && props.busyLabel ? props.busyLabel : props.cta}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-const MAX_QUESTIONS = 3
-
-/**
- * Part 1: a short conversation with the AI interviewer. Each answer comes from
- * the server action; the transcript and the "Key facts" board both render from
- * the live attempt record, not from local state.
- */
-function ClarifyPart({ attempt }: { attempt: AttemptRecord }) {
-  const { error } = useToast()
-  const [question, setQuestion] = useState('')
-  const [asking, setAsking] = useState(false)
-  const [finishing, setFinishing] = useState(false)
-  const [pending, setPending] = useState<string | null>(null)
-  const qa = attempt.data.qa ?? []
-  const left = MAX_QUESTIONS - qa.length
-
-  async function ask() {
-    const q = question.trim()
-    if (!q) return
-    setAsking(true)
-    setPending(q)
-    setQuestion('')
-    try {
-      await callAction('askQuestion', { attemptId: attempt.recordId, question: q })
-    } catch (e) {
-      error('The interviewer could not answer', e instanceof Error ? e.message : String(e))
-      setQuestion(q)
-    } finally {
-      setPending(null)
-      setAsking(false)
-    }
-  }
-
-  async function finish() {
-    setFinishing(true)
-    try {
-      await callAction('finishClarify', { attemptId: attempt.recordId })
-    } catch (e) {
-      error('Could not continue', e instanceof Error ? e.message : String(e))
-      setFinishing(false)
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      <PartHeading
-        n={1}
-        title="Clarify"
-        hint={`Ask the interviewer up to ${MAX_QUESTIONS} questions before you structure. Good questions uncover the facts that matter.`}
-      />
-      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-        <Bubble who="interviewer">
-          Thanks for coming in. You&apos;ve read the situation. What would you like to know before you structure your
-          approach?
-        </Bubble>
-        {qa.map((x, i) => (
-          <div key={i} className="space-y-3">
-            <Bubble who="you">{x.q}</Bubble>
-            <Bubble who="interviewer">{x.a}</Bubble>
-          </div>
-        ))}
-        {pending && (
+        {tab === 'model' && done ? (
+          <ModelAnswer attempt={a} />
+        ) : (
           <>
-            <Bubble who="you">{pending}</Bubble>
-            <Bubble who="interviewer">
-              <span className="text-muted-foreground">Thinking…</span>
-            </Bubble>
+            <p className="leading-relaxed">{c.prompt}</p>
+            <ExhibitCard exhibit={a.exhibit} />
+            <KeyFacts facts={a.facts ?? []} />
           </>
         )}
-      </div>
-      {left > 0 ? (
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void ask()
-          }}
-        >
-          <input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            maxLength={500}
-            placeholder="Ask a clarifying question…"
-            aria-label="Your question"
-            disabled={asking}
-            className="h-10 flex-1 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
-          />
-          <Button type="submit" variant="outline" loading={asking} disabled={!question.trim()}>
-            Ask
-          </Button>
-        </form>
-      ) : (
-        <p className="text-sm text-muted-foreground">You&apos;ve used all {MAX_QUESTIONS} questions.</p>
+      </section>
+
+      {/* Right: the four parts, or the scorecard */}
+      <section className="min-w-0 space-y-4 self-start rounded-xl border border-border bg-card p-4 sm:p-5">
+        {!done && (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-[16rem] flex-1">
+                <Stepper current={a.currentPart} />
+              </div>
+              <Timer startedAt={a.startedAt} />
+              <ScoreChip attempt={a} />
+            </div>
+            {PARTS.filter((p) => a.results?.[String(p.n)]).map((p) => (
+              <ResultRow key={p.n} part={p.n} result={a.results[String(p.n)]} />
+            ))}
+          </>
+        )}
+        {a.currentPart === 1 && <ClarifyPart key="p1" attempt={attempt} />}
+        {a.currentPart === 2 && <StructurePart key="p2" attemptId={attempt.recordId} />}
+        {a.currentPart === 3 && <AnalyzePart key="p3" attemptId={attempt.recordId} c={c} />}
+        {a.currentPart === 4 && <RecommendPart key="p4" attemptId={attempt.recordId} />}
+        {done && <Scorecard attempt={a} onRetry={onRetry} retrying={retrying} />}
+      </section>
+    </div>
+  )
+}
+
+function Tab({
+  active,
+  disabled,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean
+  disabled?: boolean
+  onClick?: () => void
+  title?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled ? (title ?? 'Unlocks after you finish the case') : undefined}
+      className={cn(
+        '-mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 transition-colors',
+        active ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+        disabled && 'cursor-not-allowed text-muted-foreground/50 hover:text-muted-foreground/50',
       )}
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs text-muted-foreground">
-          {left} of {MAX_QUESTIONS} questions left
-        </span>
-        <Button onClick={finish} loading={finishing} disabled={asking}>
-          Continue to Structure
-        </Button>
-      </div>
-    </div>
+    >
+      {children}
+    </button>
   )
 }
 
-function Bubble({ who, children }: { who: 'you' | 'interviewer'; children: React.ReactNode }) {
-  const mine = who === 'you'
+/** Before a case starts: what you're about to do, and your past attempts. */
+function CaseIntro({
+  c,
+  past,
+  onStart,
+  starting,
+}: {
+  c: CaseSummary
+  past: AttemptRecord[]
+  onStart?: () => void
+  starting?: boolean
+}) {
+  const completed = past.filter((p) => p.data.status === 'completed')
+  const best = completed.reduce((m, p) => Math.max(m, p.data.totalScore ?? 0), 0)
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-          mine ? 'bg-primary text-primary-foreground' : 'border border-border bg-card'
-        }`}
-      >
-        {!mine && <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Interviewer</p>}
-        {children}
+    <div className="mx-auto max-w-2xl px-6 py-10">
+      <Link to="/cases" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-3.5" /> All cases
+      </Link>
+      <div className="mt-4">
+        <CaseHeader c={c} />
       </div>
-    </div>
-  )
-}
+      <p className="mt-5 text-[15px] leading-relaxed">{c.prompt}</p>
 
-function AnalyzePart({ attemptId, c }: { attemptId: string; c: CaseSummary }) {
-  const { error } = useToast()
-  const [answer, setAnswer] = useState('')
-  const [soWhat, setSoWhat] = useState('')
-  const [calcOpen, setCalcOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  async function submit() {
-    setBusy(true)
-    try {
-      await callAction('submitAnalyze', { attemptId, answer, soWhat })
-    } catch (e) {
-      error('Could not submit', e instanceof Error ? e.message : String(e))
-      setBusy(false)
-    }
-  }
-  return (
-    <div className="space-y-3">
-      <PartHeading n={3} title="Analyze" hint="Use the exhibit on the left. One submission, like the real interview." />
-      <p className="font-medium">{c.analyzeQuestion}</p>
-      <div>
-        <div className="flex overflow-hidden rounded-md border border-input focus-within:ring-1 focus-within:ring-ring">
-          <input
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            inputMode="decimal"
-            placeholder="e.g. 12.5"
-            aria-label="Your answer"
-            className="h-10 flex-1 bg-transparent px-3 font-mono text-sm outline-none"
-          />
-          <span className="flex items-center border-l border-input bg-muted px-3 font-mono text-sm text-muted-foreground">
-            {c.analyzeUnit}
-          </span>
+      <ol className="mt-6 divide-y divide-border rounded-lg border border-border">
+        {PARTS.map((p) => (
+          <li key={p.n} className="flex items-baseline gap-3 px-4 py-2.5 text-sm">
+            <span className="font-mono text-xs text-muted-foreground">0{p.n}</span>
+            <span className="font-medium">{p.label}</span>
+            <span className="flex-1 text-muted-foreground">{PART_BLURB[p.key]}</span>
+            <span className="font-mono text-xs text-muted-foreground">{p.points} pts</span>
+          </li>
+        ))}
+      </ol>
+
+      {onStart && (
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <Button size="lg" onClick={onStart} loading={starting}>
+            {completed.length > 0 ? 'Start a new attempt' : 'Start case'}
+          </Button>
+          <span className="text-xs text-muted-foreground">The timer starts when you do. About {c.estMinutes} minutes.</span>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">Answers within 2% count as correct.</p>
-      </div>
-      <div>
-        <label htmlFor="sowhat" className="text-sm font-medium">
-          So what? (one sentence)
-        </label>
-        <Textarea
-          id="sowhat"
-          value={soWhat}
-          onChange={(e) => setSoWhat(e.target.value)}
-          rows={2}
-          className="mt-1"
-          placeholder="What does this number mean for the client?"
-        />
-      </div>
-      {calcOpen && <CalculatorDrawer />}
-      <div className="flex items-center justify-between gap-2">
-        <Button variant="outline" size="sm" onClick={() => setCalcOpen((o) => !o)}>
-          <Calculator /> Calculator
-        </Button>
-        <Button onClick={submit} loading={busy} disabled={!answer.trim()}>
-          Submit
-        </Button>
-      </div>
+      )}
+
+      {completed.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold">Your attempts</h2>
+            <span className="text-xs text-muted-foreground">
+              Best <span className="font-mono text-foreground">{best}</span>/{MAX_SCORE}
+            </span>
+          </div>
+          <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+            {completed.map((p) => {
+              const b = band(p.data.totalScore ?? 0)
+              return (
+                <li key={p.recordId}>
+                  <Link
+                    to={`?attempt=${p.recordId}`}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-muted/50"
+                  >
+                    <span className="text-muted-foreground">{new Date(p.data.completedAt || p.data.startedAt).toLocaleString()}</span>
+                    <span className="flex items-center gap-3">
+                      <span className={cn('text-xs font-medium', b.tone)}>{b.label}</span>
+                      <span className="font-mono tabular-nums">{p.data.totalScore}</span>
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
 
-function SignInToStart({ c }: { c: CaseSummary }) {
+const PART_BLURB: Record<string, string> = {
+  clarify: 'Ask up to 3 questions; uncover the facts that matter',
+  structure: 'Lay out your framework',
+  analyze: 'Read the exhibit, do the math, say what it means',
+  recommend: 'Give the CEO a top-down answer',
+}
+
+function SignedOutIntro({ c }: { c: CaseSummary }) {
   const [show, setShow] = useState(false)
   return (
-    <div className="mx-auto max-w-xl px-6 py-16">
-      <CaseHeader c={c} />
-      <p className="mt-4 leading-relaxed">{c.prompt}</p>
-      <Button className="mt-6" onClick={() => setShow(true)}>
-        Sign in to start this case
-      </Button>
+    <>
+      <CaseIntro c={c} past={[]} />
+      <div className="mx-auto -mt-4 max-w-2xl px-6 pb-12">
+        <Button size="lg" onClick={() => setShow(true)}>
+          Sign in to start this case
+        </Button>
+      </div>
       {show && <AuthOverlay onClose={() => setShow(false)} />}
-    </div>
+    </>
   )
 }

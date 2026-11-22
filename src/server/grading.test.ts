@@ -68,3 +68,13 @@ describe('part scoring', () => {
     for (const [id, c] of Object.entries(HIDDEN_CASES)) expect(c.facts.filter((f) => f.key).length, id).toBe(3)
   })
 })
+
+describe('leaderboard names', () => {
+  it('shows first name and last initial only', async () => {
+    const { publicName } = await import('../actions/index')
+    expect(publicName('Mohammed Altaie')).toBe('Mohammed A.')
+    expect(publicName('Cher')).toBe('Cher')
+    expect(publicName('  ')).toBe('Anonymous')
+    expect(publicName(undefined)).toBe('Anonymous')
+  })
+})

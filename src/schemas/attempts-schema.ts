@@ -35,6 +35,14 @@ export interface ExhibitData {
   note?: string
 }
 
+/** Written by the server only when the attempt completes: the "editorial". */
+export interface AttemptReview {
+  keyInsight: string
+  modelRecommendation: string
+  working: string
+  keyFacts: Array<{ label: string; found: boolean }>
+}
+
 export interface AttemptRow {
   userId: string
   caseId: string
@@ -52,6 +60,8 @@ export interface AttemptRow {
   factIdx: number[]
   /** Part 1 conversation with the AI interviewer. */
   qa: Array<{ q: string; a: string }>
+  /** Null until the case is complete; then the model answer and missed facts. */
+  review: AttemptReview | null
   startedAt: string
   completedAt: string
 }
@@ -74,6 +84,7 @@ export const attemptsSchema: CollectionSchema = {
     { name: 'facts', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'factIdx', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'qa', storage: 'text', interpretation: { kind: 'json' } },
+    { name: 'review', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'startedAt', storage: 'text', interpretation: { kind: 'datetime' } },
     { name: 'completedAt', storage: 'text', interpretation: { kind: 'datetime' } },
   ],

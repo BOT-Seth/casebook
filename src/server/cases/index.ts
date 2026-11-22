@@ -33,6 +33,10 @@ export interface HiddenCase {
   exhibit: Exhibit
   /** Part 3 numeric answer, graded by code. */
   answer: { value: number; tolerancePct: number; working: string }
+  /** Part 3 "so what": what a good one-line interpretation of the number says. */
+  soWhatCheckpoint: string
+  /** Part 4: the case-specific "right call", graded alongside the 4 generic checkpoints. */
+  recommendationCall: string
   keyInsight: string
   modelRecommendation: string
 }
@@ -79,6 +83,10 @@ export const HIDDEN_CASES: Record<string, HiddenCase> = {
       tolerancePct: 2,
       working: '(0.7% shrink + 0.8% distribution) x $1.2B = $18.0M, which is the entire 1.5-point margin decline.',
     },
+    soWhatCheckpoint:
+      'Concludes that shrink and distribution together explain essentially all of the profit decline, so the problem is supply-chain cost, not revenue or pricing',
+    recommendationCall:
+      'Identifies the January 2024 switch to a third-party logistics provider (through higher distribution cost and more spoilage) as the root cause, and recommends fixing the supply chain rather than raising prices or cutting stores',
     keyInsight:
       'The January 2024 switch to a third-party logistics provider caused both problems: distribution costs rose, and less frequent fresh deliveries increased spoilage.',
     modelRecommendation:
@@ -119,6 +127,10 @@ export const HIDDEN_CASES: Record<string, HiddenCase> = {
       working:
         'Fixed costs = $180k + $240k depreciation = $420k/yr. Margin = $0.32 - $0.12 = $0.20/kWh. Break-even energy = $420k / $0.20 = 2.1M kWh/yr. Per van = 30 x 300 = 9,000 kWh/yr. 2.1M / 9,000 = 233 vans.',
     },
+    soWhatCheckpoint:
+      'Connects roughly 233 vans (about 78% of a 300-van hub) to needing very high utilization, i.e. anchor customers or signed contracts before building',
+    recommendationCall:
+      'Recommends entering in a phased or conditional way (fewer hubs first, tied to signed anchor customers), not an immediate 6-hub launch and not a flat no',
     keyInsight:
       'Break-even needs 78% utilization per hub (233 of 300 vans). All 6 hubs need about 1,400 vans, 13% of the 10,800 addressable vans, while competitors already hold 35%: achievable only with anchor contracts.',
     modelRecommendation:
@@ -157,6 +169,10 @@ export const HIDDEN_CASES: Record<string, HiddenCase> = {
       tolerancePct: 2,
       working: 'LTV = ARPA x gross margin / churn = $12,000 x 0.80 / 0.20 = $48,000.',
     },
+    soWhatCheckpoint:
+      'Connects the $48,000 LTV to weak unit economics (LTV/CAC of about 2.7x, below the 3x benchmark) or to the $45M price looking expensive',
+    recommendationCall:
+      'Recommends not paying the full $45M upfront: a lower price (around 5-5.5x ARR, roughly $36-40M) and/or a structure such as an earnout tied to churn improvement',
     keyInsight:
       'LTV/CAC is 48,000 / 18,000 = 2.7x, below the healthy 3x benchmark, and $45M is 6.25x ARR, above the 4-6x range for 20%-churn companies. The price only works if integration cuts churn (at 12% churn, LTV rises to $80,000).',
     modelRecommendation:
